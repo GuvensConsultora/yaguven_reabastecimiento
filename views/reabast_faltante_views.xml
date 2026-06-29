@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        "Resolver reparto" (sub-ladrillo 4): wizard de decisión-soporte ante faltante. Muestra
+        pedido vs disponible por producto y un reparto sugerido (editable) por sucursal; al aplicar
+        ajusta los despachos y regenera un pedido de backorder por el faltante. Botón en la
+        recolección (no toca menús nativos, C.2).
+    -->
+
+    <record id="view_reabast_faltante_wizard_form" model="ir.ui.view">
+        <field name="name">yaguven.reabast.faltante.wizard.form</field>
+        <field name="model">yaguven.reabast.faltante.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Resolver reparto">
+                <group>
+                    <field name="picking_id" readonly="1"/>
+                    <field name="estrategia"/>
+                </group>
+                <p class="text-muted">
+                    El reparto sugerido sale de la estrategia elegida; ajustá a mano la columna
+                    «Asignado» si hace falta. Lo no asignado va a un pedido de backorder (borrador)
+                    para la próxima recolección.
+                </p>
+                <field name="line_ids" nolabel="1">
+                    <list editable="bottom" create="0" delete="0">
+                        <field name="producto_id"/>
+                        <field name="sucursal_id"/>
+                        <field name="disponible" readonly="1"/>
+                        <field name="pedido_qty" readonly="1"/>
+                        <field name="asignado_qty"/>
+                        <field name="faltante_qty" readonly="1"
+                               decoration-danger="faltante_qty &gt; 0"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_aplicar" type="object" string="Aplicar reparto"
+                            class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reabast_faltante" model="ir.actions.act_window">
+        <field name="name">Resolver reparto</field>
+        <field name="res_model">yaguven.reabast.faltante.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Botón en el form de la recolección (mientras no esté validada/cancelada) -->
+    <record id="view_picking_form_reabast_faltante" model="ir.ui.view">
+        <field name="name">stock.picking.form.reabast.faltante</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="%(action_reabast_faltante)d" type="action"
+                        string="Resolver reparto"
+                        invisible="yaguven_recoleccion_estado not in ('pendiente', 'en_recoleccion')"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

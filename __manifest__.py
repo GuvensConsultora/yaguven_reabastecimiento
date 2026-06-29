@@ -1,6 +1,6 @@
 {
     'name': 'Yagüven - Reabastecimiento Central/Sucursales',
-    'version': '19.0.1.5.0',
+    'version': '19.0.1.6.0',
     'summary': 'Circuito de reabastecimiento con gateo de pasos (recolección → despacho → recepción)',
     'description': """
 Capa operativa del circuito de reabastecimiento Central → Sucursales (y sucursal → sucursal).
@@ -29,6 +29,11 @@ encadenado (make_to_order), marca los pedidos "Procesado" y abre la recolección
 
 Sub-ladrillo 3c (Hoja consolidada): página en el form de la recolección con una matriz legible
 producto × sucursal (qué preparar en total y adónde va por sucursal), computada de la cadena.
+
+Sub-ladrillo 4 (Política de faltante): wizard "Resolver reparto" en la recolección. Muestra pedido
+vs disponible por producto y un reparto sugerido editable (prorrateo / prioridad / partes iguales);
+al aplicar ajusta los despachos a lo realmente repartido y regenera un pedido borrador de backorder
+por sucursal con el faltante no despachado.
 """,
     'author': 'Yagüven C.G.',
     'website': 'https://yaguven.com',
@@ -44,6 +49,7 @@ producto × sucursal (qué preparar en total y adónde va por sucursal), computa
         'data/reabast_pedido_sequence.xml',
         'views/reabast_menus.xml',
         'views/reabast_picking_views.xml',
+        'views/reabast_faltante_views.xml',
         'views/reabast_pedido_views.xml',
         'views/reabast_armar_views.xml',
     ],
