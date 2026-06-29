@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Capa de claridad en el form del picking (solo recolecciones del reabastecimiento):
+          - botón "Comenzar recolección" (visible mientras está Pendiente);
+          - badge con el estado del ciclo (Pendiente → En recolección → Hecha).
+        En pickings que no son de paso 'recoleccion', yaguven_recoleccion_estado es vacío -> ambos
+        quedan ocultos. No se toca ninguna otra vista nativa (C.2).
+    -->
+    <record id="view_picking_form_reabast" model="ir.ui.view">
+        <field name="name">stock.picking.form.reabast.recoleccion</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_yaguven_comenzar_recoleccion" type="object"
+                        string="Comenzar recolección" class="oe_highlight"
+                        invisible="yaguven_recoleccion_estado != 'pendiente'"/>
+                <field name="yaguven_recoleccion_estado" widget="badge"
+                       invisible="not yaguven_recoleccion_estado"
+                       decoration-info="yaguven_recoleccion_estado == 'pendiente'"
+                       decoration-warning="yaguven_recoleccion_estado == 'en_recoleccion'"
+                       decoration-success="yaguven_recoleccion_estado == 'hecha'"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
