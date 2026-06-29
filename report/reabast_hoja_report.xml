@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        PDF "Hoja de recolección consolidada" (sub-ladrillo 3c-bis): el documento que el operario
+        lleva al depósito. Reusa el campo computado yaguven_hoja_consolidada (misma matriz que la
+        pantalla) -> el impreso calza exacto con lo que se ve. Sin binding_model_id: no aparece en
+        el menú Imprimir genérico de cualquier picking; se dispara por el botón de la recolección.
+    -->
+
+    <record id="action_report_hoja_recoleccion" model="ir.actions.report">
+        <field name="name">Hoja de recolección</field>
+        <field name="model">stock.picking</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">yaguven_reabastecimiento.report_hoja_recoleccion</field>
+        <field name="report_file">yaguven_reabastecimiento.report_hoja_recoleccion</field>
+        <field name="print_report_name">'Hoja recolección - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_hoja_recoleccion">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <h2 class="mt-2 mb-3">Hoja de recolección consolidada</h2>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <strong>Recolección:</strong> <span t-field="o.name"/><br/>
+                                <strong>Origen:</strong> <span t-field="o.location_id.display_name"/>
+                            </div>
+                            <div class="col-6 text-end">
+                                <strong>Fecha:</strong> <span t-field="o.scheduled_date" t-options='{"widget": "date"}'/><br/>
+                                <strong>Estado:</strong> <span t-field="o.yaguven_recoleccion_estado"/>
+                            </div>
+                        </div>
+                        <div t-out="o.yaguven_hoja_consolidada"/>
+                        <p class="mt-4 text-muted" style="font-size:9px;">
+                            Total a preparar = lo que sale de Central. La cantidad por sucursal es a
+                            cuánto va cada despacho. Documento de trabajo interno — Yagüven C.G.
+                        </p>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

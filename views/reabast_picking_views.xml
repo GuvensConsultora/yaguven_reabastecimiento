@@ -21,6 +21,9 @@
                        decoration-info="yaguven_recoleccion_estado == 'pendiente'"
                        decoration-warning="yaguven_recoleccion_estado == 'en_recoleccion'"
                        decoration-success="yaguven_recoleccion_estado == 'hecha'"/>
+                <button name="%(action_report_hoja_recoleccion)d" type="action"
+                        string="Imprimir hoja"
+                        invisible="not yaguven_recoleccion_estado"/>
             </xpath>
             <!-- Hoja consolidada legible (3c): matriz producto × sucursal, solo en recolecciones -->
             <xpath expr="//notebook" position="inside">
