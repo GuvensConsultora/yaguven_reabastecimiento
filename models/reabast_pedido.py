@@ -117,6 +117,12 @@ class ReabastPedido(models.Model):
         loc_exist = reco_type.default_location_src_id
         loc_salida = reco_type.default_location_dest_id
 
+        # la compañía la fija el tipo de operación de Central (no la del usuario, que puede ser otra
+        # en multicompañía) -> evita el cruce de empresas en pickings/moves (C.1, company_dependent)
+        comp = reco_type.company_id
+        Picking = self.env['stock.picking'].with_company(comp)
+        Move = self.env['stock.move'].with_company(comp)
+
         # acumular cantidades: total por producto (recolección) y por sucursal+producto (despachos)
         total_prod = defaultdict(float)
         suc_prod = defaultdict(lambda: defaultdict(float))
@@ -125,19 +131,16 @@ class ReabastPedido(models.Model):
                 total_prod[ln.product_id] += ln.product_uom_qty
                 suc_prod[ped.sucursal_id][ln.product_id] += ln.product_uom_qty
 
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-
         # 1) recolección consolidada: un move por producto (cantidad total)
         reco_pick = Picking.create({
-            'picking_type_id': reco_type.id,
+            'picking_type_id': reco_type.id, 'company_id': comp.id,
             'location_id': loc_exist.id, 'location_dest_id': loc_salida.id,
             'origin': _('Reabastecimiento'),
         })
         reco_moves = {}
         for prod, qty in total_prod.items():
             reco_moves[prod] = Move.create({
-                'product_id': prod.id, 'product_uom_qty': qty,
+                'product_id': prod.id, 'product_uom_qty': qty, 'company_id': comp.id,
                 'location_id': loc_exist.id, 'location_dest_id': loc_salida.id,
                 'picking_id': reco_pick.id, 'picking_type_id': reco_type.id,
             })
@@ -147,13 +150,13 @@ class ReabastPedido(models.Model):
         for sucursal, prods in suc_prod.items():
             desp_type, transito = self._tipo_despacho_sucursal(sucursal)
             desp_pick = Picking.create({
-                'picking_type_id': desp_type.id,
+                'picking_type_id': desp_type.id, 'company_id': comp.id,
                 'location_id': loc_salida.id, 'location_dest_id': transito.id,
                 'origin': _('Reabastecimiento → %s') % sucursal.display_name,
             })
             for prod, qty in prods.items():
                 Move.create({
-                    'product_id': prod.id, 'product_uom_qty': qty,
+                    'product_id': prod.id, 'product_uom_qty': qty, 'company_id': comp.id,
                     'location_id': loc_salida.id, 'location_dest_id': transito.id,
                     'picking_id': desp_pick.id, 'picking_type_id': desp_type.id,
                     'procure_method': 'make_to_order',
