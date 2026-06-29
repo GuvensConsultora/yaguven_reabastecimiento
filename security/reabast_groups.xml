@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Roles del circuito de reabastecimiento (bandejas por rol).
+
+        Una categoría POR rol a propósito: en Odoo, varios grupos en una misma categoría se
+        renderizan como un único Selection EXCLUYENTE en el formulario de usuario. Los roles del
+        reabastecimiento son COMBINABLES (Central hace recolección + despacho; una sucursal hace
+        recepción), así que cada uno va en su categoría -> aparecen como checkboxes independientes.
+
+        Cada rol implica stock.group_stock_user (Inventario / Usuario) para poder operar pickings
+        sin necesidad de otorgar el resto de Inventario (no invasivo, C.2).
+    -->
+
+    <record id="module_category_reabast_recoleccion" model="ir.module.category">
+        <field name="name">Reabastecimiento · Recolección</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="module_category_reabast_despacho" model="ir.module.category">
+        <field name="name">Reabastecimiento · Despacho</field>
+        <field name="sequence">21</field>
+    </record>
+    <record id="module_category_reabast_recepcion" model="ir.module.category">
+        <field name="name">Reabastecimiento · Recepción</field>
+        <field name="sequence">22</field>
+    </record>
+    <record id="module_category_reabast_supervisor" model="ir.module.category">
+        <field name="name">Reabastecimiento · Supervisor</field>
+        <field name="sequence">23</field>
+    </record>
+
+    <record id="group_reabast_recolector" model="res.groups">
+        <field name="name">Recolector</field>
+        <field name="category_id" ref="module_category_reabast_recoleccion"/>
+        <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
+        <field name="comment">Bandeja de recolecciones del reabastecimiento (Central). Arma los productos a despachar.</field>
+    </record>
+
+    <record id="group_reabast_despachador" model="res.groups">
+        <field name="name">Despachador</field>
+        <field name="category_id" ref="module_category_reabast_despacho"/>
+        <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
+        <field name="comment">Bandeja de despachos del reabastecimiento (Central). Carga el camión y valida la salida.</field>
+    </record>
+
+    <record id="group_reabast_recepcionista" model="res.groups">
+        <field name="name">Recepcionista</field>
+        <field name="category_id" ref="module_category_reabast_recepcion"/>
+        <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
+        <field name="comment">Bandeja de recepciones de la sucursal. Confirma lo que llega.</field>
+    </record>
+
+    <record id="group_reabast_supervisor" model="res.groups">
+        <field name="name">Supervisor de reabastecimiento</field>
+        <field name="category_id" ref="module_category_reabast_supervisor"/>
+        <field name="implied_ids" eval="[(4, ref('group_reabast_recolector')),
+                                         (4, ref('group_reabast_despachador')),
+                                         (4, ref('group_reabast_recepcionista'))]"/>
+        <field name="comment">Ve las tres bandejas. Implica los tres roles (recolección, despacho, recepción).</field>
+    </record>
+
+</odoo>

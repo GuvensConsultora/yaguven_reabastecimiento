@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Bandejas por rol: una acción por paso (filtrada por picking_type_id.yaguven_reabast_paso,
+        no por id de tipo -> sirve para cualquier sucursal/tipo marcado, presente o futuro) y un
+        menú propio "Reabastecimiento" colgado del root de Inventario. Cada ítem es visible solo
+        para su rol; el Supervisor implica los tres, así que ve las tres bandejas sin listarlo en
+        cada menú. No se toca ningún menú nativo (C.2).
+    -->
+
+    <!-- ===== Acciones (reusan las vistas nativas de stock.picking) ===== -->
+    <record id="action_reabast_recoleccion" model="ir.actions.act_window">
+        <field name="name">Recolecciones</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'recoleccion')]</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay recolecciones pendientes</p>
+            <p>Acá aparecen los pedidos a preparar en Central antes de despacharlos a las sucursales.</p>
+        </field>
+    </record>
+
+    <record id="action_reabast_despacho" model="ir.actions.act_window">
+        <field name="name">Despachos</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'despacho')]</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay despachos pendientes</p>
+            <p>Acá aparecen las salidas listas para cargar al camión hacia cada sucursal. Recordá:
+               primero tiene que estar hecha la recolección.</p>
+        </field>
+    </record>
+
+    <record id="action_reabast_recepcion" model="ir.actions.act_window">
+        <field name="name">Recepciones</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'recepcion')]</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay recepciones pendientes</p>
+            <p>Acá aparece lo que llega a tu sucursal. Confirmá lo que recibís cuando baja del camión.</p>
+        </field>
+    </record>
+
+    <!-- ===== Menú propio ===== -->
+    <menuitem id="menu_reabast_root"
+              name="Reabastecimiento"
+              parent="stock.menu_stock_root"
+              sequence="5"
+              groups="group_reabast_recolector,group_reabast_despachador,group_reabast_recepcionista,group_reabast_supervisor"/>
+
+    <menuitem id="menu_reabast_recoleccion"
+              name="Recolecciones"
+              parent="menu_reabast_root"
+              action="action_reabast_recoleccion"
+              sequence="10"
+              groups="group_reabast_recolector"/>
+
+    <menuitem id="menu_reabast_despacho"
+              name="Despachos"
+              parent="menu_reabast_root"
+              action="action_reabast_despacho"
+              sequence="20"
+              groups="group_reabast_despachador"/>
+
+    <menuitem id="menu_reabast_recepcion"
+              name="Recepciones"
+              parent="menu_reabast_root"
+              action="action_reabast_recepcion"
+              sequence="30"
+              groups="group_reabast_recepcionista"/>
+
+</odoo>
