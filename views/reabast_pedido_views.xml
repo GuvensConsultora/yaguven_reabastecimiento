@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Búsqueda -->
+    <record id="view_reabast_pedido_search" model="ir.ui.view">
+        <field name="name">yaguven.reabast.pedido.search</field>
+        <field name="model">yaguven.reabast.pedido</field>
+        <field name="arch" type="xml">
+            <search string="Pedidos de reabastecimiento">
+                <field name="name"/>
+                <field name="sucursal_id"/>
+                <filter name="f_borrador" string="Borrador" domain="[('state', '=', 'borrador')]"/>
+                <filter name="f_enviado" string="Enviados" domain="[('state', '=', 'enviado')]"/>
+                <!-- O19: el group de "Agrupar por" va plano, sin expand= ni string= (ver knowledge §7b) -->
+                <group name="group_by">
+                    <filter name="g_sucursal" string="Sucursal" context="{'group_by': 'sucursal_id'}"/>
+                    <filter name="g_estado" string="Estado" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Lista -->
+    <record id="view_reabast_pedido_list" model="ir.ui.view">
+        <field name="name">yaguven.reabast.pedido.list</field>
+        <field name="model">yaguven.reabast.pedido</field>
+        <field name="arch" type="xml">
+            <list string="Pedidos de reabastecimiento">
+                <field name="name"/>
+                <field name="sucursal_id"/>
+                <field name="fecha"/>
+                <field name="user_id"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'borrador'"
+                       decoration-warning="state == 'enviado'"
+                       decoration-success="state == 'procesado'"
+                       decoration-muted="state == 'cancelado'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Formulario -->
+    <record id="view_reabast_pedido_form" model="ir.ui.view">
+        <field name="name">yaguven.reabast.pedido.form</field>
+        <field name="model">yaguven.reabast.pedido</field>
+        <field name="arch" type="xml">
+            <form string="Pedido de reabastecimiento">
+                <header>
+                    <button name="action_enviar" type="object" string="Enviar"
+                            class="oe_highlight" invisible="state != 'borrador'"/>
+                    <button name="action_borrador" type="object" string="Volver a borrador"
+                            invisible="state not in ('enviado', 'cancelado')"/>
+                    <button name="action_cancelar" type="object" string="Cancelar"
+                            invisible="state in ('procesado', 'cancelado')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="borrador,enviado,procesado"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="sucursal_id" readonly="state != 'borrador'"/>
+                            <field name="operating_unit_id" invisible="1"/>
+                            <field name="company_id" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="fecha" readonly="state != 'borrador'"/>
+                            <field name="user_id"/>
+                        </group>
+                    </group>
+                    <field name="line_ids" readonly="state != 'borrador'">
+                        <list editable="bottom">
+                            <field name="product_id"/>
+                            <field name="product_uom_qty"/>
+                            <field name="product_uom_id"/>
+                        </list>
+                    </field>
+                    <field name="note" placeholder="Observaciones..."/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Acción -->
+    <record id="action_reabast_pedido" model="ir.actions.act_window">
+        <field name="name">Pedidos de reabastecimiento</field>
+        <field name="res_model">yaguven.reabast.pedido</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Creá un pedido de reabastecimiento</p>
+            <p>Elegí la sucursal y cargá los productos que necesita. Al enviarlo, "Armar
+               recolección" lo levanta junto con las reglas de reabastecimiento.</p>
+        </field>
+    </record>
+
+    <!-- Menú (visible para Recepcionista -sucursal- y Supervisor -Central-) -->
+    <menuitem id="menu_reabast_pedido"
+              name="Pedidos"
+              parent="menu_reabast_root"
+              action="action_reabast_pedido"
+              sequence="5"
+              groups="group_reabast_recepcionista,group_reabast_supervisor"/>
+</odoo>

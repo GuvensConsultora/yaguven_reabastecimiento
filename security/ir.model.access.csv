@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_reabast_pedido_recep,reabast.pedido.recepcionista,model_yaguven_reabast_pedido,group_reabast_recepcionista,1,1,1,0
+access_reabast_pedido_super,reabast.pedido.supervisor,model_yaguven_reabast_pedido,group_reabast_supervisor,1,1,1,1
+access_reabast_pedido_line_recep,reabast.pedido.line.recepcionista,model_yaguven_reabast_pedido_line,group_reabast_recepcionista,1,1,1,1
+access_reabast_pedido_line_super,reabast.pedido.line.supervisor,model_yaguven_reabast_pedido_line,group_reabast_supervisor,1,1,1,1

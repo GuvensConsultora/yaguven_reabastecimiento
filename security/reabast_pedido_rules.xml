@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Scoping por sucursal vía Unidad Operativa (yaguven_operating_unit, ya instalado).
+        Cada usuario tiene operating_unit_ids; el almacén tiene operating_unit_id; el pedido
+        deriva su operating_unit_id de la sucursal. La regla acota lo que cada usuario ve/edita:
+          - usuario de sucursal (una UO) -> solo los pedidos de su sucursal;
+          - usuario de Central / Supervisor (las 13 UO) -> todos.
+        Ortogonal al rol (2c): el rol da acceso al modelo, la UO define qué sucursales.
+    -->
+    <record id="rule_reabast_pedido_uo" model="ir.rule">
+        <field name="name">Pedido de reabastecimiento: solo la UO del usuario</field>
+        <field name="model_id" ref="model_yaguven_reabast_pedido"/>
+        <field name="domain_force">['|', ('operating_unit_id', '=', False), ('operating_unit_id', 'in', user.operating_unit_ids.ids)]</field>
+        <field name="groups" eval="[(4, ref('group_reabast_recepcionista')), (4, ref('group_reabast_supervisor'))]"/>
+    </record>
+</odoo>
