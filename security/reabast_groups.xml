@@ -3,56 +3,72 @@
     <!--
         Roles del circuito de reabastecimiento (bandejas por rol).
 
-        Una categoría POR rol a propósito: en Odoo, varios grupos en una misma categoría se
-        renderizan como un único Selection EXCLUYENTE en el formulario de usuario. Los roles del
-        reabastecimiento son COMBINABLES (Central hace recolección + despacho; una sucursal hace
-        recepción), así que cada uno va en su categoría -> aparecen como checkboxes independientes.
+        Odoo 19 refactorizó res.groups: ya NO existe res.groups.category_id. La jerarquía es
+        ahora Categoría (ir.module.category) -> Privilegio (res.groups.privilege) -> Grupos
+        (res.groups, con privilege_id). En el formulario de usuario, un privilegio con UN solo
+        grupo se muestra como checkbox; con varios, como Selection excluyente.
+
+        Los roles del reabastecimiento son COMBINABLES (Central hace recolección + despacho; una
+        sucursal hace recepción), así que va UN privilegio por rol -> cada uno aparece como
+        checkbox independiente bajo la sección "Reabastecimiento".
 
         Cada rol implica stock.group_stock_user (Inventario / Usuario) para poder operar pickings
         sin necesidad de otorgar el resto de Inventario (no invasivo, C.2).
     -->
 
-    <record id="module_category_reabast_recoleccion" model="ir.module.category">
-        <field name="name">Reabastecimiento · Recolección</field>
+    <!-- ===== Categoría (sección de la app en el formulario de usuario) ===== -->
+    <record id="module_category_reabastecimiento" model="ir.module.category">
+        <field name="name">Reabastecimiento</field>
         <field name="sequence">20</field>
     </record>
-    <record id="module_category_reabast_despacho" model="ir.module.category">
-        <field name="name">Reabastecimiento · Despacho</field>
-        <field name="sequence">21</field>
+
+    <!-- ===== Un privilegio por rol (1 grupo c/u -> checkbox combinable) ===== -->
+    <record id="privilege_reabast_recoleccion" model="res.groups.privilege">
+        <field name="name">Recolección</field>
+        <field name="category_id" ref="module_category_reabastecimiento"/>
+        <field name="sequence">10</field>
     </record>
-    <record id="module_category_reabast_recepcion" model="ir.module.category">
-        <field name="name">Reabastecimiento · Recepción</field>
-        <field name="sequence">22</field>
+    <record id="privilege_reabast_despacho" model="res.groups.privilege">
+        <field name="name">Despacho</field>
+        <field name="category_id" ref="module_category_reabastecimiento"/>
+        <field name="sequence">20</field>
     </record>
-    <record id="module_category_reabast_supervisor" model="ir.module.category">
-        <field name="name">Reabastecimiento · Supervisor</field>
-        <field name="sequence">23</field>
+    <record id="privilege_reabast_recepcion" model="res.groups.privilege">
+        <field name="name">Recepción</field>
+        <field name="category_id" ref="module_category_reabastecimiento"/>
+        <field name="sequence">30</field>
+    </record>
+    <record id="privilege_reabast_supervisor" model="res.groups.privilege">
+        <field name="name">Supervisor</field>
+        <field name="category_id" ref="module_category_reabastecimiento"/>
+        <field name="sequence">40</field>
     </record>
 
+    <!-- ===== Grupos de rol ===== -->
     <record id="group_reabast_recolector" model="res.groups">
         <field name="name">Recolector</field>
-        <field name="category_id" ref="module_category_reabast_recoleccion"/>
+        <field name="privilege_id" ref="privilege_reabast_recoleccion"/>
         <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
         <field name="comment">Bandeja de recolecciones del reabastecimiento (Central). Arma los productos a despachar.</field>
     </record>
 
     <record id="group_reabast_despachador" model="res.groups">
         <field name="name">Despachador</field>
-        <field name="category_id" ref="module_category_reabast_despacho"/>
+        <field name="privilege_id" ref="privilege_reabast_despacho"/>
         <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
         <field name="comment">Bandeja de despachos del reabastecimiento (Central). Carga el camión y valida la salida.</field>
     </record>
 
     <record id="group_reabast_recepcionista" model="res.groups">
         <field name="name">Recepcionista</field>
-        <field name="category_id" ref="module_category_reabast_recepcion"/>
+        <field name="privilege_id" ref="privilege_reabast_recepcion"/>
         <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
         <field name="comment">Bandeja de recepciones de la sucursal. Confirma lo que llega.</field>
     </record>
 
     <record id="group_reabast_supervisor" model="res.groups">
         <field name="name">Supervisor de reabastecimiento</field>
-        <field name="category_id" ref="module_category_reabast_supervisor"/>
+        <field name="privilege_id" ref="privilege_reabast_supervisor"/>
         <field name="implied_ids" eval="[(4, ref('group_reabast_recolector')),
                                          (4, ref('group_reabast_despachador')),
                                          (4, ref('group_reabast_recepcionista'))]"/>
