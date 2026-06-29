@@ -1,6 +1,6 @@
 {
     'name': 'Yagüven - Reabastecimiento Central/Sucursales',
-    'version': '19.0.1.7.0',
+    'version': '19.0.1.7.1',
     'summary': 'Circuito de reabastecimiento con gateo de pasos (recolección → despacho → recepción)',
     'description': """
 Capa operativa del circuito de reabastecimiento Central → Sucursales (y sucursal → sucursal).

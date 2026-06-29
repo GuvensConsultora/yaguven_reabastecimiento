@@ -27,6 +27,18 @@ class StockPicking(models.Model):
         help='Ciclo de la recolección: Pendiente (abierta a nuevos pedidos) → En recolección '
              '(congelada) → Hecha (validada; habilita el despacho).')
 
+    @api.depends('state', 'yaguven_en_recoleccion', 'picking_type_id.yaguven_reabast_paso')
+    def _compute_yaguven_recoleccion_estado(self):
+        for picking in self:
+            if picking.picking_type_id.yaguven_reabast_paso != 'recoleccion':
+                picking.yaguven_recoleccion_estado = False
+            elif picking.state == 'done':
+                picking.yaguven_recoleccion_estado = 'hecha'
+            elif picking.yaguven_en_recoleccion:
+                picking.yaguven_recoleccion_estado = 'en_recoleccion'
+            else:
+                picking.yaguven_recoleccion_estado = 'pendiente'
+
     # --- Hoja consolidada legible (sub-ladrillo 3c) ---
     # Matriz producto × sucursal computada de la cadena (recolección → despachos → tránsito de cada
     # sucursal). Solo en pickings de paso 'recoleccion'. Read-only: es vista, no dato editable.
