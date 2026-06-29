@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Acción "Armar recolección": wizard de confirmación (target=new) que lista los pedidos
+        enviados a consolidar y, al confirmar, llama al motor action_armar_recoleccion del modelo
+        Pedido. Solo Supervisor (Central). No toca menús nativos (C.2).
+    -->
+
+    <record id="view_reabast_armar_wizard_form" model="ir.ui.view">
+        <field name="name">yaguven.reabast.armar.wizard.form</field>
+        <field name="model">yaguven.reabast.armar.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Armar recolección">
+                <p>
+                    Se va a consolidar <strong><field name="cantidad" nolabel="1" class="oe_inline"/></strong>
+                    pedido(s) de <strong><field name="sucursales" nolabel="1" class="oe_inline"/></strong>
+                    sucursal(es) en <strong>una recolección</strong> (Central) más un
+                    <strong>despacho por sucursal</strong>. Los pedidos quedan «Procesado».
+                </p>
+                <field name="pedido_ids" nolabel="1">
+                    <list>
+                        <field name="name"/>
+                        <field name="sucursal_id"/>
+                        <field name="fecha"/>
+                        <field name="user_id"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_armar" type="object" string="Armar recolección"
+                            class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reabast_armar" model="ir.actions.act_window">
+        <field name="name">Armar recolección</field>
+        <field name="res_model">yaguven.reabast.armar.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_reabast_armar"
+              name="Armar recolección"
+              parent="menu_reabast_root"
+              action="action_reabast_armar"
+              sequence="5"
+              groups="group_reabast_supervisor"/>
+
+</odoo>

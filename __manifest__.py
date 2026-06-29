@@ -1,6 +1,6 @@
 {
     'name': 'Yagüven - Reabastecimiento Central/Sucursales',
-    'version': '19.0.1.3.0',
+    'version': '19.0.1.4.0',
     'summary': 'Circuito de reabastecimiento con gateo de pasos (recolección → despacho → recepción)',
     'description': """
 Capa operativa del circuito de reabastecimiento Central → Sucursales (y sucursal → sucursal).
@@ -22,6 +22,10 @@ Sub-ladrillo 3a (Pedido de reabastecimiento): documento liviano (yaguven.reabast
 sucursal -o Central por ella- carga lo que necesita; al enviarlo, "Armar recolección" lo consolida
 con los orderpoints. Scoping por Unidad Operativa (yaguven_operating_unit): cada sucursal ve solo
 sus pedidos, Central ve todos.
+
+Sub-ladrillo 3b (Armar recolección): wizard de confirmación (Supervisor) que consolida los pedidos
+enviados en UNA recolección (un move por producto, cantidad total) + un despacho por sucursal
+encadenado (make_to_order), marca los pedidos "Procesado" y abre la recolección.
 """,
     'author': 'Yagüven C.G.',
     'website': 'https://yaguven.com',
@@ -38,6 +42,7 @@ sus pedidos, Central ve todos.
         'views/reabast_menus.xml',
         'views/reabast_picking_views.xml',
         'views/reabast_pedido_views.xml',
+        'views/reabast_armar_views.xml',
     ],
     'license': 'LGPL-3',
     'installable': True,

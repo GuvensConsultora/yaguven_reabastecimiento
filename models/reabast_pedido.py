@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 
@@ -29,6 +31,11 @@ class ReabastPedido(models.Model):
         help='Borrador (editable) → Enviado (lo toma "Armar recolección") → Procesado / Cancelado.')
     line_ids = fields.One2many('yaguven.reabast.pedido.line', 'pedido_id', string='Líneas')
     note = fields.Text(string='Observaciones')
+    # vínculo a la recolección consolidada que procesó el pedido (campo en NUESTRO modelo, no en
+    # el nativo stock.picking — C.2). Lo setea action_armar_recoleccion (lo invoca el wizard 3b).
+    picking_recoleccion_id = fields.Many2one(
+        'stock.picking', string='Recolección', readonly=True, copy=False, tracking=True,
+        help='Recolección consolidada en la que se procesó este pedido.')
     company_id = fields.Many2one(
         'res.company', string='Compañía', required=True,
         default=lambda self: self.env.company)
@@ -63,6 +70,112 @@ class ReabastPedido(models.Model):
                 raise UserError(_("Un pedido ya procesado no se puede cancelar."))
             pedido.state = 'cancelado'
         return True
+
+    # ------------------------------------------------------------------
+    # Armar recolección (Etapa 3b) — motor invocado por el wizard de confirmación
+    # ------------------------------------------------------------------
+    def _tipo_recoleccion(self):
+        """Tipo de picking de Recolección de Central (único). Resuelto por paso, sin ids fijos."""
+        tipo = self.env['stock.picking.type'].search(
+            [('yaguven_reabast_paso', '=', 'recoleccion')], limit=1)
+        if not tipo:
+            raise UserError(_(
+                "No está configurado el tipo de operación 'Recolección' de reabastecimiento. "
+                "Revisá la topología de reabastecimiento de Central."))
+        return tipo
+
+    def _tipo_despacho_sucursal(self, sucursal):
+        """Resuelve el tipo de despacho de una sucursal: vía su tipo de recepción
+        (que cuelga del almacén-sucursal) obtenemos el tránsito, y de ahí el despacho."""
+        Tipo = self.env['stock.picking.type']
+        recep = Tipo.search([
+            ('yaguven_reabast_paso', '=', 'recepcion'),
+            ('warehouse_id', '=', sucursal.id)], limit=1)
+        if not recep:
+            raise UserError(_(
+                "La sucursal «%s» no tiene topología de reabastecimiento (falta el tipo de "
+                "Recepción). Configurala antes de armar la recolección.") % sucursal.display_name)
+        transito = recep.default_location_src_id
+        desp = Tipo.search([
+            ('yaguven_reabast_paso', '=', 'despacho'),
+            ('default_location_dest_id', '=', transito.id)], limit=1)
+        if not desp:
+            raise UserError(_(
+                "La sucursal «%s» no tiene tipo de Despacho hacia su tránsito.") % sucursal.display_name)
+        return desp, transito
+
+    def action_armar_recoleccion(self):
+        """Consolida los pedidos 'enviado' de self en UNA recolección (un move por producto,
+        cantidad total) + un despacho por sucursal (encadenado por move_orig_ids). Marca los
+        pedidos como 'procesado' y los vincula a la recolección. Mecanismo verificado en vivo (3b).
+        Lo invoca el wizard de confirmación tras la pantalla previa."""
+        pedidos = self.filtered(lambda p: p.state == 'enviado')
+        if not pedidos:
+            raise UserError(_("No hay pedidos enviados para armar la recolección."))
+
+        reco_type = self._tipo_recoleccion()
+        loc_exist = reco_type.default_location_src_id
+        loc_salida = reco_type.default_location_dest_id
+
+        # acumular cantidades: total por producto (recolección) y por sucursal+producto (despachos)
+        total_prod = defaultdict(float)
+        suc_prod = defaultdict(lambda: defaultdict(float))
+        for ped in pedidos:
+            for ln in ped.line_ids:
+                total_prod[ln.product_id] += ln.product_uom_qty
+                suc_prod[ped.sucursal_id][ln.product_id] += ln.product_uom_qty
+
+        Picking = self.env['stock.picking']
+        Move = self.env['stock.move']
+
+        # 1) recolección consolidada: un move por producto (cantidad total)
+        reco_pick = Picking.create({
+            'picking_type_id': reco_type.id,
+            'location_id': loc_exist.id, 'location_dest_id': loc_salida.id,
+            'origin': _('Reabastecimiento'),
+        })
+        reco_moves = {}
+        for prod, qty in total_prod.items():
+            reco_moves[prod] = Move.create({
+                'product_id': prod.id, 'product_uom_qty': qty,
+                'location_id': loc_exist.id, 'location_dest_id': loc_salida.id,
+                'picking_id': reco_pick.id, 'picking_type_id': reco_type.id,
+            })
+
+        # 2) un despacho por sucursal, encadenado a la recolección por producto
+        pickings = reco_pick
+        for sucursal, prods in suc_prod.items():
+            desp_type, transito = self._tipo_despacho_sucursal(sucursal)
+            desp_pick = Picking.create({
+                'picking_type_id': desp_type.id,
+                'location_id': loc_salida.id, 'location_dest_id': transito.id,
+                'origin': _('Reabastecimiento → %s') % sucursal.display_name,
+            })
+            for prod, qty in prods.items():
+                Move.create({
+                    'product_id': prod.id, 'product_uom_qty': qty,
+                    'location_id': loc_salida.id, 'location_dest_id': transito.id,
+                    'picking_id': desp_pick.id, 'picking_type_id': desp_type.id,
+                    'procure_method': 'make_to_order',
+                    'move_orig_ids': [(4, reco_moves[prod].id)],
+                })
+            pickings |= desp_pick
+
+        # 3) confirmar todo (recolección queda Pendiente, lista para "Comenzar recolección")
+        pickings.action_confirm()
+
+        # 4) marcar pedidos procesados y vincularlos a la recolección
+        pedidos.write({'state': 'procesado', 'picking_recoleccion_id': reco_pick.id})
+
+        # abrir la recolección consolidada
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Recolección consolidada'),
+            'res_model': 'stock.picking',
+            'res_id': reco_pick.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
 
 
 class ReabastPedidoLine(models.Model):
