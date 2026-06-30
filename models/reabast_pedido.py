@@ -85,8 +85,9 @@ class ReabastPedido(models.Model):
         return tipo
 
     def _tipo_despacho_sucursal(self, sucursal):
-        """Resuelve el tipo de despacho de una sucursal: vía su tipo de recepción
-        (que cuelga del almacén-sucursal) obtenemos el tránsito, y de ahí el despacho."""
+        """Resuelve los tipos del tramo a una sucursal: vía su tipo de Recepción (que cuelga del
+        almacén-sucursal) obtenemos el tránsito, y de ahí el Despacho. Devuelve
+        (despacho, transito, recepción) para encadenar los tres pasos del circuito."""
         Tipo = self.env['stock.picking.type']
         recep = Tipo.search([
             ('yaguven_reabast_paso', '=', 'recepcion'),
@@ -102,7 +103,7 @@ class ReabastPedido(models.Model):
         if not desp:
             raise UserError(_(
                 "La sucursal «%s» no tiene tipo de Despacho hacia su tránsito.") % sucursal.display_name)
-        return desp, transito
+        return desp, transito, recep
 
     def action_armar_recoleccion(self):
         """Consolida los pedidos 'enviado' de self en UNA recolección (un move por producto,
@@ -145,24 +146,41 @@ class ReabastPedido(models.Model):
                 'picking_id': reco_pick.id, 'picking_type_id': reco_type.id,
             })
 
-        # 2) un despacho por sucursal, encadenado a la recolección por producto
+        # 2) por sucursal: un despacho (Salida→Tránsito) encadenado a la recolección, y una
+        #    recepción (Tránsito→Existencias sucursal) encadenada al despacho. Los tres tramos
+        #    quedan ligados por move_orig_ids/make_to_order -> el gateo recolección→despacho→
+        #    recepción funciona y el stock llega efectivamente a la sucursal.
         pickings = reco_pick
         for sucursal, prods in suc_prod.items():
-            desp_type, transito = self._tipo_despacho_sucursal(sucursal)
+            desp_type, transito, recep_type = self._tipo_despacho_sucursal(sucursal)
+            loc_suc = recep_type.default_location_dest_id   # Existencias de la sucursal
             desp_pick = Picking.create({
                 'picking_type_id': desp_type.id, 'company_id': comp.id,
                 'location_id': loc_salida.id, 'location_dest_id': transito.id,
                 'origin': _('Reabastecimiento → %s') % sucursal.display_name,
             })
+            recep_pick = Picking.create({
+                'picking_type_id': recep_type.id, 'company_id': comp.id,
+                'location_id': transito.id, 'location_dest_id': loc_suc.id,
+                'origin': _('Reabastecimiento → %s') % sucursal.display_name,
+            })
             for prod, qty in prods.items():
-                Move.create({
+                desp_move = Move.create({
                     'product_id': prod.id, 'product_uom_qty': qty, 'company_id': comp.id,
                     'location_id': loc_salida.id, 'location_dest_id': transito.id,
                     'picking_id': desp_pick.id, 'picking_type_id': desp_type.id,
                     'procure_method': 'make_to_order',
                     'move_orig_ids': [(4, reco_moves[prod].id)],
                 })
+                Move.create({
+                    'product_id': prod.id, 'product_uom_qty': qty, 'company_id': comp.id,
+                    'location_id': transito.id, 'location_dest_id': loc_suc.id,
+                    'picking_id': recep_pick.id, 'picking_type_id': recep_type.id,
+                    'procure_method': 'make_to_order',
+                    'move_orig_ids': [(4, desp_move.id)],
+                })
             pickings |= desp_pick
+            pickings |= recep_pick
 
         # 3) confirmar todo (recolección queda Pendiente, lista para "Comenzar recolección")
         pickings.action_confirm()
