@@ -151,7 +151,11 @@ class ReabastFaltanteWizard(models.TransientModel):
 
         falt_por_suc = defaultdict(list)   # sucursal -> [(producto, faltante)]
         asign_por_prod = defaultdict(float)
-        for ln in self.line_ids:
+        # El cliente web, al hacer submit de la lista editable del wizard, puede inyectar una línea
+        # fantasma sin producto/despacho (producto_id=False, asignado>0) que rompería la constraint
+        # de abajo ("asignar más que lo pedido en False para False"). Cada línea real nace de un
+        # despacho (despacho_move_id en _build_lines) -> filtramos por eso y descartamos la espuria.
+        for ln in self.line_ids.filtered('despacho_move_id'):
             rounding = ln.producto_id.uom_id.rounding or 1.0
             asign = ln.asignado_qty
             if float_compare(asign, 0.0, precision_rounding=rounding) < 0:
