@@ -160,11 +160,6 @@ class ReabastFaltanteWizard(models.TransientModel):
         if picking.state in ('done', 'cancel'):
             raise UserError(_("Esta recolección ya no admite cambios de reparto (está %s).") % picking.state)
         company = picking.company_id
-        raise UserError("DEBUG nlines=%s | %s" % (
-            len(self.line_ids),
-            " ;; ".join("p=%s s=%s asig=%s ped=%s dmv=%s" % (
-                ln.producto_id.id, ln.sucursal_id.id, ln.asignado_qty, ln.pedido_qty, ln.despacho_move_id.id)
-                for ln in self.line_ids)))
 
         # El despacho de cada línea se re-deriva acá por (producto, sucursal) y NO se confía en
         # ln.despacho_move_id: el cliente web, al hacer submit de la lista editable, reenvía las

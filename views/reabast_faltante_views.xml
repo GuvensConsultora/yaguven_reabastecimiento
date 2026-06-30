@@ -22,13 +22,17 @@
                     para la próxima recolección.
                 </p>
                 <field name="line_ids" nolabel="1">
+                    <!-- force_save en los campos readonly: el cliente web, al guardar la lista
+                         editable del wizard, por defecto NO reenvía los readonly de las líneas
+                         (llegan en False) y action_aplicar no puede re-derivar el despacho.
+                         force_save los incluye en el guardado. -->
                     <list editable="bottom" create="0" delete="0">
-                        <field name="producto_id"/>
-                        <field name="sucursal_id"/>
-                        <field name="disponible" readonly="1"/>
-                        <field name="pedido_qty" readonly="1"/>
+                        <field name="producto_id" readonly="1" force_save="1"/>
+                        <field name="sucursal_id" readonly="1" force_save="1"/>
+                        <field name="disponible" readonly="1" force_save="1"/>
+                        <field name="pedido_qty" readonly="1" force_save="1"/>
                         <field name="asignado_qty"/>
-                        <field name="faltante_qty" readonly="1"
+                        <field name="faltante_qty" readonly="1" force_save="1"
                                decoration-danger="faltante_qty &gt; 0"/>
                     </list>
                 </field>
