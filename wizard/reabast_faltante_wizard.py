@@ -181,6 +181,11 @@ class ReabastFaltanteWizard(models.TransientModel):
             dmove = dmap.get((ln.producto_id.id, ln.sucursal_id.id))
             if dmove:
                 dmove.with_company(company).write({'product_uom_qty': asign})
+                # propagar el reparto AGUAS ABAJO: la recepción (move_dest del despacho) debe pedir
+                # lo realmente despachado, no la cantidad original; si no, llega menos que su demanda
+                # y la validación pide "orden parcial" y el stock no aterriza completo en la sucursal.
+                dmove.move_dest_ids.filtered(lambda m: m.state != 'cancel') \
+                    .with_company(company).write({'product_uom_qty': asign})
             asign_por_prod[ln.producto_id] += asign
             falt = ln.pedido_qty - asign
             if float_compare(falt, 0.0, precision_rounding=rounding) > 0:
