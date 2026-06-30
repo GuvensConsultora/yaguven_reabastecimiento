@@ -64,6 +64,18 @@ class ReabastFaltanteWizard(models.TransientModel):
             ('default_location_src_id', '=', transito.id)], limit=1)
         return recep.warehouse_id
 
+    def _despacho_move_map(self, picking):
+        """{(producto_id, sucursal_id): despacho move}. Recorre la cadena recolección→despacho.
+        Permite re-derivar el despacho de cada línea sin depender del m2o readonly que el cliente
+        web no reenvía en el submit del wizard."""
+        m = {}
+        for mv in picking.move_ids.filtered(lambda x: x.state != 'cancel'):
+            for d in mv.move_dest_ids.filtered(lambda x: x.state != 'cancel'):
+                wh = self._warehouse_de_transito(d.location_dest_id)
+                if wh:
+                    m[(mv.product_id.id, wh.id)] = d
+        return m
+
     def _build_lines(self, picking, estrategia):
         por_prod = defaultdict(list)  # producto -> [despacho moves]
         for mv in picking.move_ids.filtered(lambda m: m.state != 'cancel'):
@@ -149,13 +161,16 @@ class ReabastFaltanteWizard(models.TransientModel):
             raise UserError(_("Esta recolección ya no admite cambios de reparto (está %s).") % picking.state)
         company = picking.company_id
 
+        # El despacho de cada línea se re-deriva acá por (producto, sucursal) y NO se confía en
+        # ln.despacho_move_id: el cliente web, al hacer submit de la lista editable, reenvía las
+        # líneas solo con los campos visibles (producto/sucursal/asignado), perdiendo el m2o
+        # readonly despacho_move_id. Además puede inyectar una línea fantasma (producto/sucursal
+        # False) -> se descarta filtrando por producto_id+sucursal_id (ambos viajan en la vista).
+        dmap = self._despacho_move_map(picking)   # {(producto_id, sucursal_id): despacho move}
+
         falt_por_suc = defaultdict(list)   # sucursal -> [(producto, faltante)]
         asign_por_prod = defaultdict(float)
-        # El cliente web, al hacer submit de la lista editable del wizard, puede inyectar una línea
-        # fantasma sin producto/despacho (producto_id=False, asignado>0) que rompería la constraint
-        # de abajo ("asignar más que lo pedido en False para False"). Cada línea real nace de un
-        # despacho (despacho_move_id en _build_lines) -> filtramos por eso y descartamos la espuria.
-        for ln in self.line_ids.filtered('despacho_move_id'):
+        for ln in self.line_ids.filtered(lambda l: l.producto_id and l.sucursal_id):
             rounding = ln.producto_id.uom_id.rounding or 1.0
             asign = ln.asignado_qty
             if float_compare(asign, 0.0, precision_rounding=rounding) < 0:
@@ -163,10 +178,12 @@ class ReabastFaltanteWizard(models.TransientModel):
             if float_compare(asign, ln.pedido_qty, precision_rounding=rounding) > 0:
                 raise UserError(_("No podés asignar más que lo pedido en %s para %s.")
                                 % (ln.producto_id.display_name, ln.sucursal_id.display_name))
-            ln.despacho_move_id.with_company(company).write({'product_uom_qty': asign})
+            dmove = dmap.get((ln.producto_id.id, ln.sucursal_id.id))
+            if dmove:
+                dmove.with_company(company).write({'product_uom_qty': asign})
             asign_por_prod[ln.producto_id] += asign
             falt = ln.pedido_qty - asign
-            if float_compare(falt, 0.0, precision_rounding=rounding) > 0 and ln.sucursal_id:
+            if float_compare(falt, 0.0, precision_rounding=rounding) > 0:
                 falt_por_suc[ln.sucursal_id].append((ln.producto_id, falt))
 
         # la recolección mueve lo realmente repartido (un move por producto = suma asignada)
