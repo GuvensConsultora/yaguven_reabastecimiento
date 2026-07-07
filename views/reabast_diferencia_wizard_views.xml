@@ -57,6 +57,17 @@
         <field name="target">new</field>
     </record>
 
+    <!-- Acción para abrir la diferencia desde la recepción (usa el m2o del picking).
+         Definida ANTES de la vista que la referencia: Odoo parsea el XML de arriba a abajo y el
+         %(...)d de la vista falla si la acción está más abajo en el mismo archivo. -->
+    <record id="action_reabast_diferencia_form_from_picking" model="ir.actions.act_window">
+        <field name="name">Diferencias de la recepción</field>
+        <field name="res_model">yaguven.reabast.diferencia</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_id', '=', active_id)]</field>
+        <field name="target">current</field>
+    </record>
+
     <!-- Botón en el form de la recepción: solo en pickings de paso 'recepcion' aún abiertos y sin
          diferencias ya informadas. -->
     <record id="view_picking_form_reabast_diferencia" model="ir.ui.view">
@@ -75,15 +86,6 @@
                         invisible="not yaguven_diferencia_id"/>
             </xpath>
         </field>
-    </record>
-
-    <!-- Acción para abrir la diferencia desde la recepción (usa el m2o del picking) -->
-    <record id="action_reabast_diferencia_form_from_picking" model="ir.actions.act_window">
-        <field name="name">Diferencias de la recepción</field>
-        <field name="res_model">yaguven.reabast.diferencia</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('picking_id', '=', active_id)]</field>
-        <field name="target">current</field>
     </record>
 
 </odoo>
