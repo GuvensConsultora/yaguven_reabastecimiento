@@ -197,19 +197,18 @@ class ReabastDiferencia(models.Model):
                 "Configuralo antes de resolver por devolución o reemplazo."))
         src = self.sucursal_id.lot_stock_id            # Existencias de la sucursal que devuelve
         dest = tipo.default_location_dest_id           # Existencias de Central
+        comp = self.company_id.id
+        # Mismo patrón de creación de move que action_armar (O19: stock.move NO tiene 'name';
+        # la UdM se toma del producto). El move lleva picking_id + picking_type_id explícitos.
         picking = self.env['stock.picking'].create({
-            'picking_type_id': tipo.id,
-            'location_id': src.id,
-            'location_dest_id': dest.id,
+            'picking_type_id': tipo.id, 'company_id': comp,
+            'location_id': src.id, 'location_dest_id': dest.id,
             'origin': self.name,
-            'move_ids': [(0, 0, {
-                'name': producto.display_name,
-                'product_id': producto.id,
-                'product_uom_qty': cant,
-                'product_uom': producto.uom_id.id,
-                'location_id': src.id,
-                'location_dest_id': dest.id,
-            })],
+        })
+        self.env['stock.move'].create({
+            'product_id': producto.id, 'product_uom_qty': cant, 'company_id': comp,
+            'location_id': src.id, 'location_dest_id': dest.id,
+            'picking_id': picking.id, 'picking_type_id': tipo.id,
         })
         picking.action_confirm()
         return picking
