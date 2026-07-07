@@ -93,10 +93,9 @@
                 <field name="picking_id"/>
                 <field name="sucursal_id"/>
                 <filter name="pendientes" string="Sin resolver" domain="[('state', '!=', 'resuelta')]"/>
-                <group expand="0" string="Agrupar por">
-                    <filter name="group_sucursal" string="Sucursal" context="{'group_by': 'sucursal_id'}"/>
-                    <filter name="group_state" string="Estado" context="{'group_by': 'state'}"/>
-                </group>
+                <separator/>
+                <filter name="group_sucursal" string="Sucursal" context="{'group_by': 'sucursal_id'}"/>
+                <filter name="group_state" string="Estado" context="{'group_by': 'state'}"/>
             </search>
         </field>
     </record>

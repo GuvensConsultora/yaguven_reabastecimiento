@@ -46,10 +46,10 @@ class ReabastDiferencia(models.Model):
         string='Líneas pendientes', compute='_compute_pendientes_count',
         help='Cantidad de líneas de la diferencia todavía sin resolver.')
 
-    _sql_constraints = [
-        ('picking_uniq', 'unique(picking_id)',
-         'Ya existe un reporte de diferencias para esta recepción.'),
-    ]
+    _picking_uniq = models.Constraint(
+        'unique(picking_id)',
+        'Ya existe un reporte de diferencias para esta recepción.',
+    )
 
     @api.depends('line_ids.resuelta')
     def _compute_pendientes_count(self):
@@ -227,8 +227,8 @@ class ReabastDiferenciaLinea(models.Model):
     _order = 'diferencia_id, id'
 
     diferencia_id = fields.Many2one(
-        'yaguven.reabast.diferencia', string='Diferencia', required=True, ondelete='cascade',
-        index=True)
+        'yaguven.reabast.diferencia', string='Reporte de diferencia', required=True,
+        ondelete='cascade', index=True)
     sucursal_id = fields.Many2one(related='diferencia_id.sucursal_id', store=True, readonly=True)
 
     tipo = fields.Selection(
