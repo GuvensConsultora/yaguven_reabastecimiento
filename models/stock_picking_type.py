@@ -7,8 +7,10 @@ class StockPickingType(models.Model):
     yaguven_reabast_paso = fields.Selection(
         [('recoleccion', 'Recolección'),
          ('despacho', 'Despacho'),
-         ('recepcion', 'Recepción')],
+         ('recepcion', 'Recepción'),
+         ('devolucion', 'Devolución')],
         string='Paso de reabastecimiento',
         help='Marca este tipo de operación como un paso del circuito de reabastecimiento. '
              'Un paso solo puede validarse cuando el paso anterior de la cadena está hecho '
-             '(recolección → despacho → recepción).')
+             '(recolección → despacho → recepción). "Devolución" es el traslado de retorno '
+             'sucursal → central que genera la resolución de una diferencia de recepción (5b).')

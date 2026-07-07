@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        5b — Resolución de diferencias en Central.
+        Form de la diferencia (Central elige la resolución por línea y la aplica), bandeja
+        "Diferencias" (Supervisor) y bandeja "Devoluciones" (traslados de retorno generados).
+        Reusa stock.picking para las devoluciones; no toca menús/vistas nativas (C.2).
+    -->
+
+    <!-- ===== Form: Central resuelve línea por línea ===== -->
+    <record id="view_reabast_diferencia_form" model="ir.ui.view">
+        <field name="name">yaguven.reabast.diferencia.form</field>
+        <field name="model">yaguven.reabast.diferencia</field>
+        <field name="arch" type="xml">
+            <form string="Diferencia de recepción">
+                <header>
+                    <button name="action_aplicar_resoluciones" type="object"
+                            string="Aplicar resoluciones" class="oe_highlight"
+                            invisible="state == 'resuelta'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pendiente,en_resolucion,resuelta"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="picking_id"/>
+                            <field name="sucursal_id"/>
+                        </group>
+                        <group>
+                            <field name="informado_por_id"/>
+                            <field name="fecha_informe"/>
+                            <field name="pendientes_count"/>
+                        </group>
+                    </group>
+                    <separator string="Diferencias a resolver"/>
+                    <p class="text-muted">
+                        Elegí la resolución de cada línea y tocá «Aplicar resoluciones». Autorizar
+                        faltante genera un pedido de reenvío; devolución/reemplazo generan el traslado
+                        de retorno; ajuste asume la diferencia (el stock ya refleja lo recibido).
+                    </p>
+                    <field name="line_ids">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="tipo" readonly="1"/>
+                            <field name="producto_esperado_id" readonly="1"/>
+                            <field name="producto_recibido_id" readonly="1"/>
+                            <field name="cant_esperada" readonly="1"/>
+                            <field name="cant_recibida" readonly="1"/>
+                            <field name="cant_diferencia" readonly="1"
+                                   decoration-danger="cant_diferencia &lt; 0"
+                                   decoration-success="cant_diferencia &gt; 0"/>
+                            <field name="nota" readonly="1"/>
+                            <field name="resolucion" readonly="resuelta"/>
+                            <field name="resuelta" readonly="1"/>
+                            <field name="pedido_generado_id" readonly="1"/>
+                            <field name="move_generado_id" readonly="1" optional="hide"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ===== Lista / bandeja ===== -->
+    <record id="view_reabast_diferencia_list" model="ir.ui.view">
+        <field name="name">yaguven.reabast.diferencia.list</field>
+        <field name="model">yaguven.reabast.diferencia</field>
+        <field name="arch" type="xml">
+            <list string="Diferencias de recepción"
+                  decoration-warning="state == 'pendiente'"
+                  decoration-info="state == 'en_resolucion'"
+                  decoration-muted="state == 'resuelta'">
+                <field name="name"/>
+                <field name="picking_id"/>
+                <field name="sucursal_id"/>
+                <field name="fecha_informe"/>
+                <field name="pendientes_count"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ===== Buscador ===== -->
+    <record id="view_reabast_diferencia_search" model="ir.ui.view">
+        <field name="name">yaguven.reabast.diferencia.search</field>
+        <field name="model">yaguven.reabast.diferencia</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="picking_id"/>
+                <field name="sucursal_id"/>
+                <filter name="pendientes" string="Sin resolver" domain="[('state', '!=', 'resuelta')]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="group_sucursal" string="Sucursal" context="{'group_by': 'sucursal_id'}"/>
+                    <filter name="group_state" string="Estado" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ===== Acción "Diferencias" ===== -->
+    <record id="action_reabast_diferencia" model="ir.actions.act_window">
+        <field name="name">Diferencias</field>
+        <field name="res_model">yaguven.reabast.diferencia</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reabast_diferencia_search"/>
+        <field name="context">{'search_default_pendientes': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay diferencias sin resolver 🎉</p>
+            <p>Acá aparecen las diferencias que las sucursales informaron al recibir. Elegí la
+               resolución de cada línea (autorizar el faltante, pedir devolución, aprobar reemplazo
+               o ajustar) y aplicalas.</p>
+        </field>
+    </record>
+
+    <!-- ===== Bandeja de devoluciones (traslados de retorno sucursal → Central) ===== -->
+    <record id="action_reabast_devoluciones" model="ir.actions.act_window">
+        <field name="name">Devoluciones</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'devolucion')]</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay devoluciones pendientes</p>
+            <p>Acá aparecen los traslados de retorno sucursal → Central que generan las resoluciones
+               de diferencias (devolución y reemplazo). Validalos cuando la mercadería vuelve a Central.</p>
+        </field>
+    </record>
+
+    <!-- ===== Menús (Supervisor) ===== -->
+    <menuitem id="menu_reabast_diferencias"
+              name="Diferencias"
+              parent="menu_reabast_root"
+              action="action_reabast_diferencia"
+              sequence="40"
+              groups="group_reabast_supervisor"/>
+
+    <menuitem id="menu_reabast_devoluciones"
+              name="Devoluciones"
+              parent="menu_reabast_root"
+              action="action_reabast_devoluciones"
+              sequence="45"
+              groups="group_reabast_supervisor"/>
+
+</odoo>

@@ -1,5 +1,8 @@
+from markupsafe import Markup
 from odoo import api, fields, models, _
+from odoo.exceptions import UserError
 from odoo.tools import float_compare
+from odoo.tools.misc import html_escape
 
 
 class ReabastDiferencia(models.Model):
@@ -74,6 +77,149 @@ class ReabastDiferencia(models.Model):
             else:
                 dif.state = 'pendiente'
 
+    # ------------------------------------------------------------------
+    # 5b — Resolución en Central
+    # ------------------------------------------------------------------
+    def action_aplicar_resoluciones(self):
+        """Ejecuta las resoluciones que Central cargó en las líneas pendientes.
+
+        Procesa SOLO las líneas con una resolución elegida y todavía sin resolver (idempotente:
+        re-aplicar no duplica movimientos, B.7). Cada tipo de resolución genera lo que corresponde
+        (pedido de reenvío, devolución, ambos, o nada) y marca la línea `resuelta`.
+        """
+        self.ensure_one()
+        handlers = {
+            'autorizar_faltante': self._resolver_autorizar_faltante,
+            'devolucion': self._resolver_devolucion,
+            'reemplazo': self._resolver_reemplazo,
+            'ajuste': self._resolver_ajuste,
+        }
+        pendientes = self.line_ids.filtered(lambda l: l.resolucion and not l.resuelta)
+        if not pendientes:
+            raise UserError(_(
+                "No hay líneas con una resolución para aplicar. Elegí una resolución en las "
+                "líneas pendientes y volvé a intentar."))
+        for linea in pendientes:
+            handlers[linea.resolucion](linea)
+        self._sincronizar_estado()
+        return True
+
+    def _resolver_ajuste(self, linea):
+        """Asume la diferencia. La recepción se validó con lo físico real (5a, sin backorder), así
+        que el stock ya refleja la realidad: no hay movimiento que generar, solo se cierra la línea."""
+        linea.resuelta = True
+        self._post_resolucion(linea, _(
+            "Ajuste de transferencia: se asume la diferencia. El stock ya refleja lo recibido "
+            "físicamente; no se genera movimiento."))
+
+    def _resolver_autorizar_faltante(self, linea):
+        """Genera un pedido de reabastecimiento (borrador) por el faltante, para reenviarlo por el
+        circuito normal (pedido → armar → despacho → recepción)."""
+        producto = linea.producto_esperado_id
+        falta = linea.cant_esperada - linea.cant_recibida
+        if not producto or float_compare(falta, 0.0, precision_rounding=producto.uom_id.rounding) <= 0:
+            raise UserError(_(
+                "La línea «%s» no tiene un faltante para autorizar (recibido ≥ esperado).",
+                (producto or linea.producto_recibido_id).display_name))
+        pedido = self._generar_pedido_faltante(producto, falta)
+        linea.pedido_generado_id = pedido.id
+        linea.resuelta = True
+        self._post_resolucion(linea, _(
+            "Autorizado el reenvío del faltante: %(cant)s × %(prod)s. Se generó el pedido %(ped)s "
+            "(borrador) para despacharlo por el circuito.",
+            cant=('%g' % falta), prod=producto.display_name, ped=pedido.name))
+
+    def _resolver_devolucion(self, linea):
+        """Crea un traslado de devolución sucursal → central por lo que llegó de más o equivocado."""
+        producto, cant = self._devolucion_producto_cant(linea)
+        picking = self._generar_devolucion(producto, cant)
+        linea.move_generado_id = picking.move_ids[:1].id
+        linea.resuelta = True
+        self._post_resolucion(linea, _(
+            "Pedida la devolución: %(cant)s × %(prod)s vuelven a Central. Se generó el traslado "
+            "%(pick)s.", cant=('%g' % cant), prod=producto.display_name, pick=picking.name))
+
+    def _resolver_reemplazo(self, linea):
+        """Producto incorrecto: devuelve lo que vino mal Y autoriza el envío del correcto."""
+        producto_mal, cant_mal = self._devolucion_producto_cant(linea)
+        picking = self._generar_devolucion(producto_mal, cant_mal)
+        correcto = linea.producto_esperado_id
+        if not correcto or float_compare(linea.cant_esperada, 0.0,
+                                         precision_rounding=(correcto.uom_id.rounding if correcto else 0.01)) <= 0:
+            raise UserError(_(
+                "El reemplazo necesita un producto esperado con cantidad para reenviar (línea de %s).",
+                producto_mal.display_name))
+        pedido = self._generar_pedido_faltante(correcto, linea.cant_esperada)
+        linea.move_generado_id = picking.move_ids[:1].id
+        linea.pedido_generado_id = pedido.id
+        linea.resuelta = True
+        self._post_resolucion(linea, _(
+            "Reemplazo aprobado: devolución de %(cm)s × %(pm)s (traslado %(pick)s) y reenvío de "
+            "%(cc)s × %(pc)s (pedido %(ped)s).",
+            cm=('%g' % cant_mal), pm=producto_mal.display_name, pick=picking.name,
+            cc=('%g' % linea.cant_esperada), pc=correcto.display_name, ped=pedido.name))
+
+    # --- helpers de generación ---
+    def _devolucion_producto_cant(self, linea):
+        """Qué producto y cuánto vuelve a Central según el tipo de diferencia."""
+        if linea.tipo == 'incorrecto':
+            # Vino otro producto: vuelve todo lo recibido equivocado.
+            producto = linea.producto_recibido_id
+            cant = linea.cant_recibida
+        else:
+            # Sobrante / cantidad de más: vuelve el excedente del mismo producto.
+            producto = linea.producto_recibido_id or linea.producto_esperado_id
+            cant = linea.cant_recibida - linea.cant_esperada
+        if not producto or float_compare(
+                cant, 0.0, precision_rounding=producto.uom_id.rounding) <= 0:
+            raise UserError(_(
+                "La línea «%s» no tiene un excedente para devolver.",
+                (producto or linea.producto_esperado_id).display_name))
+        return producto, cant
+
+    def _generar_pedido_faltante(self, producto, cant):
+        """Crea un pedido de reabastecimiento en borrador para la sucursal de esta diferencia."""
+        return self.env['yaguven.reabast.pedido'].create({
+            'sucursal_id': self.sucursal_id.id,
+            'note': _("Generado al resolver la diferencia %(dif)s de la recepción %(rec)s.",
+                      dif=self.name, rec=self.picking_id.name),
+            'line_ids': [(0, 0, {'product_id': producto.id, 'product_uom_qty': cant})],
+        })
+
+    def _generar_devolucion(self, producto, cant):
+        """Traslado interno de devolución sucursal → central (paso 'devolucion'), en borrador
+        confirmado para que Central/Depósito lo valide cuando la mercadería vuelve físicamente."""
+        tipo = self.env['stock.picking.type'].search(
+            [('yaguven_reabast_paso', '=', 'devolucion')], limit=1)
+        if not tipo:
+            raise UserError(_(
+                "No hay un tipo de operación de Devolución configurado (paso 'devolucion'). "
+                "Configuralo antes de resolver por devolución o reemplazo."))
+        src = self.sucursal_id.lot_stock_id            # Existencias de la sucursal que devuelve
+        dest = tipo.default_location_dest_id           # Existencias de Central
+        picking = self.env['stock.picking'].create({
+            'picking_type_id': tipo.id,
+            'location_id': src.id,
+            'location_dest_id': dest.id,
+            'origin': self.name,
+            'move_ids': [(0, 0, {
+                'name': producto.display_name,
+                'product_id': producto.id,
+                'product_uom_qty': cant,
+                'product_uom': producto.uom_id.id,
+                'location_id': src.id,
+                'location_dest_id': dest.id,
+            })],
+        })
+        picking.action_confirm()
+        return picking
+
+    def _post_resolucion(self, linea, texto):
+        """Nota en el chatter de la diferencia (C.4: Markup + mt_note + html_escape)."""
+        self.message_post(
+            body=Markup("<p>%s</p>") % html_escape(texto),
+            message_type="comment", subtype_xmlid="mail.mt_note")
+
 
 class ReabastDiferenciaLinea(models.Model):
     _name = 'yaguven.reabast.diferencia.linea'
@@ -117,8 +263,9 @@ class ReabastDiferenciaLinea(models.Model):
          ('devolucion', 'Pedir devolución'),
          ('reemplazo', 'Aprobar reemplazo'),
          ('ajuste', 'Ajustar transferencia')],
-        string='Resolución', readonly=True, copy=False,
-        help='Decisión de Central para regularizar esta diferencia.')
+        string='Resolución', copy=False,
+        help='Decisión de Central para regularizar esta diferencia. La elige Central en la '
+             'bandeja de diferencias y se ejecuta con "Aplicar resoluciones".')
     resuelta = fields.Boolean(string='Resuelta', default=False, readonly=True, copy=False)
     move_generado_id = fields.Many2one(
         'stock.move', string='Movimiento generado', readonly=True, copy=False,
