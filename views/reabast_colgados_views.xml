@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Frente C — etapa 1: lista "Despachos colgados".
+
+        Un despacho de reabastecimiento "colgado" = ya está listo para cargar/validar (state
+        'assigned') pero nadie lo terminó, así que su mercadería queda reservada en WH/Salida y
+        contamina el próximo ciclo. La lista los muestra con los días parados y resalta en rojo
+        los que llevan 1+ día. No toca ninguna vista ni menú nativo (C.2); reusa stock.picking.
+    -->
+
+    <!-- Vista lista dedicada: resalta por antigüedad (rojo 1+ día, ámbar del día) -->
+    <record id="view_reabast_colgados_list" model="ir.ui.view">
+        <field name="name">reabast.despachos.colgados.list</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <list string="Despachos colgados" create="false"
+                  decoration-danger="yaguven_dias_parado &gt;= 1"
+                  decoration-warning="yaguven_dias_parado == 0">
+                <field name="name" string="Despacho"/>
+                <field name="origin" string="Sucursal"/>
+                <field name="scheduled_date" string="Fecha programada"/>
+                <field name="yaguven_dias_parado" string="Días parado"/>
+                <field name="state" string="Estado"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Acción: solo despachos abiertos (listos y sin validar) -->
+    <record id="action_reabast_despachos_colgados" model="ir.actions.act_window">
+        <field name="name">Despachos colgados</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'despacho'), ('state', '=', 'assigned')]</field>
+        <field name="context">{}</field>
+        <field name="view_id" ref="view_reabast_colgados_list"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay despachos colgados 🎉</p>
+            <p>Acá aparecen los despachos que quedaron listos pero sin terminar de validar. Mientras
+               están acá, su mercadería sigue reservada en la zona de salida. Terminalos (o cancelalos)
+               para liberar la salida.</p>
+        </field>
+    </record>
+
+    <!-- Menú (Despachador + Supervisor, que implica Despachador) -->
+    <menuitem id="menu_reabast_despachos_colgados"
+              name="Despachos colgados"
+              parent="menu_reabast_root"
+              action="action_reabast_despachos_colgados"
+              sequence="25"
+              groups="group_reabast_despachador"/>
+
+</odoo>

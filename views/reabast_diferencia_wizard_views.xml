@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        "Informar diferencias" (sub-ladrillo 5a): wizard que la sucursal abre desde su recepción.
+        Precarga lo esperado (recibido = esperado por default; se edita lo que difiere) y una lista
+        aparte para lo que llegó de más / incorrecto. Al aplicar valida la recepción con lo físico
+        (sin backorder) y registra la diferencia para que Central la resuelva. Botón en el form de la
+        recepción, solo en pickings de paso 'recepcion' abiertos (no toca menús nativos, C.2).
+    -->
+
+    <record id="view_reabast_diferencia_wizard_form" model="ir.ui.view">
+        <field name="name">yaguven.reabast.diferencia.wizard.form</field>
+        <field name="model">yaguven.reabast.diferencia.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Informar diferencias">
+                <field name="picking_id" invisible="1"/>
+                <p class="text-muted">
+                    Dejá en «Recibido» lo que realmente llegó de cada producto. Lo que no coincida
+                    (faltante o cantidad distinta) queda como diferencia para que Central resuelva.
+                    Si llegó algo que no estaba en el remito, cargalo abajo en «Sobrantes / incorrectos».
+                </p>
+                <field name="line_ids" nolabel="1">
+                    <!-- force_save en los readonly: el cliente web no reenvía por defecto los
+                         readonly de la lista editable; sin esto action_aplicar los recibe en False. -->
+                    <list editable="bottom" create="0" delete="0" string="Lo esperado">
+                        <field name="move_id" column_invisible="1"/>
+                        <field name="producto_id" readonly="1" force_save="1"/>
+                        <field name="cant_esperada" readonly="1" force_save="1"/>
+                        <field name="cant_recibida"/>
+                        <field name="faltante" readonly="1" force_save="1"
+                               decoration-danger="faltante &gt; 0" decoration-success="faltante &lt; 0"/>
+                        <field name="nota"/>
+                    </list>
+                </field>
+                <separator string="Sobrantes / incorrectos (llegó y no estaba en el remito)"/>
+                <field name="extra_ids" nolabel="1">
+                    <list editable="bottom" string="Sobrantes / incorrectos">
+                        <field name="producto_id"/>
+                        <field name="tipo"/>
+                        <field name="cant_recibida"/>
+                        <field name="nota"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_aplicar" type="object"
+                            string="Confirmar recepción e informar diferencias" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reabast_diferencia_wizard" model="ir.actions.act_window">
+        <field name="name">Informar diferencias</field>
+        <field name="res_model">yaguven.reabast.diferencia.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Botón en el form de la recepción: solo en pickings de paso 'recepcion' aún abiertos y sin
+         diferencias ya informadas. -->
+    <record id="view_picking_form_reabast_diferencia" model="ir.ui.view">
+        <field name="name">stock.picking.form.reabast.diferencia</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="yaguven_reabast_paso" invisible="1"/>
+                <field name="yaguven_diferencia_id" invisible="1"/>
+                <button name="%(action_reabast_diferencia_wizard)d" type="action"
+                        string="Informar diferencias" class="oe_highlight"
+                        invisible="yaguven_reabast_paso != 'recepcion' or state in ('done', 'cancel') or yaguven_diferencia_id"/>
+                <button name="%(action_reabast_diferencia_form_from_picking)d" type="action"
+                        string="Ver diferencias"
+                        invisible="not yaguven_diferencia_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Acción para abrir la diferencia desde la recepción (usa el m2o del picking) -->
+    <record id="action_reabast_diferencia_form_from_picking" model="ir.actions.act_window">
+        <field name="name">Diferencias de la recepción</field>
+        <field name="res_model">yaguven.reabast.diferencia</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('picking_id', '=', active_id)]</field>
+        <field name="target">current</field>
+    </record>
+
+</odoo>

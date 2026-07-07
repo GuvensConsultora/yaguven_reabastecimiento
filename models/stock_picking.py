@@ -8,6 +8,19 @@ from odoo.tools.misc import html_escape
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
+    # --- Paso del circuito, expuesto para las vistas (sub-ladrillo 5) ---
+    # Related de solo lectura al tipo de operación: las vistas no pueden evaluar un dotted-path
+    # (picking_type_id.yaguven_reabast_paso) en un `invisible`, así que se expone acá para gobernar
+    # la visibilidad del botón "Informar diferencias" (y futuros por paso). No es dato nuevo (C.2).
+    yaguven_reabast_paso = fields.Selection(
+        related='picking_type_id.yaguven_reabast_paso', string='Paso de reabastecimiento',
+        readonly=True)
+
+    # --- Reporte de diferencias de recepción (sub-ladrillo 5) ---
+    yaguven_diferencia_id = fields.Many2one(
+        'yaguven.reabast.diferencia', string='Diferencias informadas', copy=False, readonly=True,
+        help='Reporte de diferencias de esta recepción (si la sucursal informó alguna).')
+
     # --- Estado intermedio "En recolección" + cutoff (sub-ladrillo 2d) ---
     # El flag vive en el picking a propósito (C.2): el cutoff se aplica en el dominio que
     # stock.move._search_picking_for_assignation_domain arma SOBRE stock.picking; un m2o externo
@@ -123,6 +136,30 @@ class StockPicking(models.Model):
                 picking.yaguven_recoleccion_estado = 'en_recoleccion'
             else:
                 picking.yaguven_recoleccion_estado = 'pendiente'
+
+    # --- Despachos colgados: días parado (frente C, etapa 1) ---
+    # Días que un despacho de reabastecimiento lleva abierto (ni hecho ni cancelado). Alimenta la
+    # lista "Despachos colgados" (resaltado por antigüedad) y el aviso automático (etapa 2). No
+    # almacenado: se recomputa al leer (basta para vista/dominio y para el cron diario). C.2.
+    yaguven_dias_parado = fields.Integer(
+        string='Días parado',
+        compute='_compute_yaguven_dias_parado',
+        help='Días que este despacho de reabastecimiento lleva sin terminarse ni cancelarse. '
+             '0 si está hecho, cancelado o no es un despacho.')
+
+    @api.depends('state', 'scheduled_date', 'picking_type_id.yaguven_reabast_paso')
+    def _compute_yaguven_dias_parado(self):
+        hoy = fields.Date.context_today(self)
+        for picking in self:
+            if (picking.picking_type_id.yaguven_reabast_paso == 'despacho'
+                    and picking.state not in ('done', 'cancel') and picking.scheduled_date):
+                # scheduled_date es Datetime en UTC -> pasar a la fecha local del usuario (ART) antes
+                # de restar, para no correr un día por la diferencia horaria.
+                sched = fields.Datetime.context_timestamp(
+                    picking, fields.Datetime.to_datetime(picking.scheduled_date)).date()
+                picking.yaguven_dias_parado = max((hoy - sched).days, 0)
+            else:
+                picking.yaguven_dias_parado = 0
 
     def action_yaguven_comenzar_recoleccion(self):
         """Congela la recolección: a partir de acá los pedidos nuevos no se fusionan a este
