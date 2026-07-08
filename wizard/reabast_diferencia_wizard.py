@@ -157,7 +157,8 @@ class ReabastDiferenciaWizard(models.TransientModel):
             'yaguven_reabastecimiento.group_reabast_supervisor', raise_if_not_found=False)
         resumen = _("Resolver diferencias de recepción %s (sucursal %s)") % (
             diferencia.picking_id.name, suc)
-        for user in (supervisores.users if supervisores else self.env['res.users']):
+        # O19: res.groups ya no tiene 'users' -> all_user_ids (miembros directos + implicados).
+        for user in (supervisores.all_user_ids if supervisores else self.env['res.users']):
             diferencia.activity_schedule(
                 'mail.mail_activity_data_todo', user_id=user.id, summary=resumen)
 
