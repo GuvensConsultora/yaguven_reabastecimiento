@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        "Contar en Central" (sub-ladrillo: diferencias de stock en Central). Antes de repartir, el
+        recolector carga lo contado físicamente por producto; si difiere del sistema, se ajusta el
+        inventario de Central (nativo) y se encadena el reparto sobre lo real. Botón en la recolección
+        (no toca menús nativos, C.2).
+    -->
+
+    <record id="view_reabast_conteo_wizard_form" model="ir.ui.view">
+        <field name="name">yaguven.reabast.conteo.wizard.form</field>
+        <field name="model">yaguven.reabast.conteo.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Contar en Central">
+                <group>
+                    <field name="picking_id" readonly="1"/>
+                </group>
+                <p class="text-muted">
+                    Cargá lo que HAY DE VERDAD en Central por producto. Donde el contado difiera del
+                    sistema, ajustamos el inventario de Central para que coincida con el físico. Si
+                    tras el ajuste no alcanza para cubrir los pedidos, se abre el reparto en pantalla.
+                </p>
+                <field name="line_ids" nolabel="1">
+                    <!-- force_save en los readonly: al guardar la lista editable, el cliente web no
+                         reenvía por defecto los readonly de las líneas (llegarían en False). -->
+                    <list editable="bottom" create="0" delete="0">
+                        <field name="producto_id" readonly="1" force_save="1"/>
+                        <field name="uom_name" readonly="1" force_save="1"/>
+                        <field name="pedido_qty" readonly="1" force_save="1"/>
+                        <field name="sistema_qty" readonly="1" force_save="1"/>
+                        <field name="contado_qty"/>
+                        <field name="diferencia" readonly="1" force_save="1"
+                               decoration-danger="diferencia &lt; 0"
+                               decoration-success="diferencia &gt; 0"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_aplicar" type="object"
+                            string="Confirmar conteo y ajustar" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reabast_conteo" model="ir.actions.act_window">
+        <field name="name">Contar en Central</field>
+        <field name="res_model">yaguven.reabast.conteo.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Botón en el form de la recolección (mientras no esté validada/cancelada) -->
+    <record id="view_picking_form_reabast_conteo" model="ir.ui.view">
+        <field name="name">stock.picking.form.reabast.conteo</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="%(action_reabast_conteo)d" type="action"
+                        string="Contar en Central"
+                        invisible="yaguven_recoleccion_estado not in ('pendiente', 'en_recoleccion')"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
