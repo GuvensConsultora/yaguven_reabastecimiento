@@ -63,6 +63,7 @@ class ReabastDiferenciaWizard(models.TransientModel):
         sucursal = picking.picking_type_id.warehouse_id
 
         dif_lines = []   # (0,0,vals) para yaguven.reabast.diferencia.linea
+        correcciones_transito = []  # [(producto, cantidad, origen, destino), ...] para la nota
 
         # 1) Esperado: escribir la cantidad recibida en cada move + registrar faltante/sobrante/cantidad
         for ln in self.line_ids:
@@ -88,6 +89,12 @@ class ReabastDiferenciaWizard(models.TransientModel):
                     'cant_recibida': ln.cant_recibida,
                     'nota': ln.nota or False,
                 }))
+                # Reconciliar Tránsito: sin esto, la ubicación de Tránsito de la sucursal queda
+                # con stock varado (faltante) o negativo (sobrante) — invisible en Kardex/Stock/
+                # Diferencias. Hallazgo 2026-07-17 (Ejercicio 1 de tensión funcional).
+                corr = self._reconciliar_transito(mv, prod, falto, company)
+                if corr:
+                    correcciones_transito.append(corr)
 
         # 2) Extras: productos que llegaron y no estaban (sobrante / incorrecto). Se REGISTRAN; el
         #    efecto sobre el stock (entra a la sucursal / devolución) lo decide Central en 5b.
@@ -127,6 +134,8 @@ class ReabastDiferenciaWizard(models.TransientModel):
         })
         picking.yaguven_diferencia_id = diferencia.id
         self._notificar_central(diferencia)
+        if correcciones_transito:
+            self._post_correcciones_transito(diferencia, correcciones_transito)
 
         # abrir la diferencia recién creada para que el recepcionista la vea
         return {
@@ -161,6 +170,59 @@ class ReabastDiferenciaWizard(models.TransientModel):
         for user in (supervisores.all_user_ids if supervisores else self.env['res.users']):
             diferencia.activity_schedule(
                 'mail.mail_activity_data_todo', user_id=user.id, summary=resumen)
+
+    # ------------------------------------------------------------------
+    # Reconciliación de Tránsito (2026-07-17): lo que informar diferencias ajusta es el lado
+    # sucursal; sin esto, la ubicación de Tránsito → <sucursal> queda con stock varado (faltante)
+    # o negativo (sobrante) que ningún informe expone. Se corrige acá, en 5a, porque es una
+    # cuestión de integridad física, no una decisión comercial (eso lo sigue resolviendo Central
+    # en 5b vía autorizar_faltante/ajuste/devolucion/reemplazo, sin tocar esto).
+    # ------------------------------------------------------------------
+    def _reconciliar_transito(self, mv, producto, falto, company):
+        """falto = cant_esperada - cant_recibida. Positivo: quedó de más en Tránsito (faltante en
+        sucursal) -> vuelve a Central. Negativo: Tránsito quedó corto (sobrante en sucursal) ->
+        se cubre desde Central. Devuelve (producto, cantidad, origen, destino) o None."""
+        rounding = producto.uom_id.rounding or 1.0
+        if float_is_zero(falto, precision_rounding=rounding):
+            return None
+        transito = mv.location_id
+        central = self._ubicacion_central(mv)
+        if not central or central == transito:
+            return None  # no se pudo derivar la cadena hacia Central; no se corrige a ciegas
+        if falto > 0:
+            origen, destino, cant = transito, central, falto
+        else:
+            origen, destino, cant = central, transito, -falto
+        correccion = self.env['stock.move'].create({
+            'product_id': producto.id, 'product_uom_qty': cant, 'company_id': company.id,
+            'location_id': origen.id, 'location_dest_id': destino.id,
+        })
+        correccion._action_confirm()
+        correccion._action_assign()
+        correccion.write({'quantity': cant, 'picked': True})
+        correccion._action_done()
+        return (producto, cant, origen, destino)
+
+    def _ubicacion_central(self, mv):
+        """Sigue move_orig_ids hasta el primer eslabón de la cadena (recolección en Central),
+        en vez de asumir un id de ubicación fijo (distinto por sucursal)."""
+        actual = mv
+        vistos = self.env['stock.move']
+        while actual.move_orig_ids and actual not in vistos:
+            vistos |= actual
+            actual = actual.move_orig_ids[:1]
+        return actual.location_id if actual != mv else False
+
+    def _post_correcciones_transito(self, diferencia, correcciones):
+        filas = ''.join(
+            '<li>%s: %s %s → %s</li>' % (
+                html_escape(prod.display_name), html_escape('%g' % cant),
+                html_escape(origen.display_name), html_escape(destino.display_name),
+            ) for prod, cant, origen, destino in correcciones)
+        body = (_("<p><strong>Tránsito reconciliado automáticamente.</strong></p>"
+                  "<p>Se corrigió el stock que había quedado desalineado en la ubicación de "
+                  "tránsito por esta diferencia:</p><ul>%s</ul>") % filas)
+        diferencia.message_post(body=Markup(body), message_type="comment", subtype_xmlid="mail.mt_note")
 
 
 class ReabastDiferenciaWizardLine(models.TransientModel):
