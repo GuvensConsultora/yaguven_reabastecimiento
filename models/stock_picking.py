@@ -208,3 +208,27 @@ class StockPicking(models.Model):
                     "Pendiente: %s"
                 ) % (etiqueta, anterior, ', '.join(pendientes.mapped('name'))))
         return super().button_validate()
+
+    def action_cancel(self):
+        """Ejercicio 2 de tensión funcional (2026-07-19): cancelar una recepción de
+        reabastecimiento a mano (en vez de "Informar diferencias") deja el stock que ya viajó
+        varado en la ubicación de Tránsito — el despacho que lo movió queda en 'done' (no se
+        puede reabrir) y la recepción cancelada es un callejón sin salida; ningún informe lo
+        expone salvo el Kardex.
+
+        "Informar diferencias" (reabast_diferencia_wizard) ya reconcilia el Tránsito (fix
+        2026-07-17): marcando cant_recibida=0 en todo, equivale a un faltante total y deja todo
+        prolijo. Por eso una recepción de reabastecimiento no se cancela directo; se redirige ahí.
+        """
+        recepciones = self.filtered(
+            lambda p: p.picking_type_id.yaguven_reabast_paso == 'recepcion'
+            and p.state not in ('done', 'cancel'))
+        if recepciones:
+            raise UserError(_(
+                "Esta recepción no se cancela directamente: dejaría el stock que ya salió de "
+                "Central varado en Tránsito, sin ningún informe que lo muestre.\n\n"
+                "Usá \"Informar diferencias\" y cargá 0 en la cantidad recibida de cada línea — "
+                "reconcilia el Tránsito solo y le avisa a Central.\n\n"
+                "Recepción: %s"
+            ) % ', '.join(recepciones.mapped('name')))
+        return super().action_cancel()
