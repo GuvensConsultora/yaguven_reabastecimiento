@@ -127,15 +127,6 @@ class StockPicking(models.Model):
 
         return Markup('<table class="table table-sm table-bordered">%s<tbody>%s</tbody>%s</table>'
                       % (head, body, foot))
-        for picking in self:
-            if picking.picking_type_id.yaguven_reabast_paso != 'recoleccion':
-                picking.yaguven_recoleccion_estado = False
-            elif picking.state == 'done':
-                picking.yaguven_recoleccion_estado = 'hecha'
-            elif picking.yaguven_en_recoleccion:
-                picking.yaguven_recoleccion_estado = 'en_recoleccion'
-            else:
-                picking.yaguven_recoleccion_estado = 'pendiente'
 
     # --- Despachos colgados: días parado (frente C, etapa 1) ---
     # Días que un despacho de reabastecimiento lleva abierto (ni hecho ni cancelado). Alimenta la
