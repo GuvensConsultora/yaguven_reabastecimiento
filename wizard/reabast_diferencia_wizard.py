@@ -112,12 +112,23 @@ class ReabastDiferenciaWizard(models.TransientModel):
                 'nota': ex.nota or False,
             }))
 
-        # 3) Validar la recepción con lo físico, SIN backorder (el faltante no queda como recepción
-        #    colgada; se resuelve como diferencia). skip_backorder + picking_ids_not_to_backorder
-        #    son los contextos nativos que saltan el wizard de backorder y no lo crean.
-        picking.with_company(company).with_context(
-            skip_backorder=True, picking_ids_not_to_backorder=picking.ids,
-        ).button_validate()
+        # 3) Cerrar la recepción con lo físico. Si llegó algo, se valida (SIN backorder):
+        #    skip_backorder + picking_ids_not_to_backorder son los contextos nativos que saltan
+        #    el wizard de backorder y no lo crean. Si NO llegó nada de nada (faltante total),
+        #    Odoo rechaza validar una transferencia con cantidad total cero — en ese caso se
+        #    cancela en su lugar (semánticamente correcto: el traslado no ocurrió). La
+        #    reconciliación de Tránsito y el registro de la diferencia ya se hicieron arriba, así
+        #    que la cancelación llega prolija. yaguven_diferencia_wizard es el flag de contexto
+        #    que el bloqueo de Ejercicio 2 (stock_picking.action_cancel) reconoce para dejarla
+        #    pasar solo cuando viene de acá, no de un cancel manual.
+        precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        total_recibido = sum(ln.cant_recibida for ln in self.line_ids)
+        if float_is_zero(total_recibido, precision_digits=precision):
+            picking.with_company(company).with_context(yaguven_diferencia_wizard=True).action_cancel()
+        else:
+            picking.with_company(company).with_context(
+                skip_backorder=True, picking_ids_not_to_backorder=picking.ids,
+            ).button_validate()
 
         # 4) Registrar la diferencia (si hubo alguna) y avisar a Central
         if not dif_lines:

@@ -210,7 +210,14 @@ class StockPicking(models.Model):
         "Informar diferencias" (reabast_diferencia_wizard) ya reconcilia el Tránsito (fix
         2026-07-17): marcando cant_recibida=0 en todo, equivale a un faltante total y deja todo
         prolijo. Por eso una recepción de reabastecimiento no se cancela directo; se redirige ahí.
+
+        Excepción (2026-07-20): cuando es el propio wizard el que cancela, DESPUÉS de reconciliar
+        Tránsito y registrar la diferencia (caso "no llegó nada de nada" — Odoo no deja validar
+        con cantidad total cero), se deja pasar. El flag de contexto solo lo pone ese wizard, no
+        un cancel manual.
         """
+        if self.env.context.get('yaguven_diferencia_wizard'):
+            return super().action_cancel()
         recepciones = self.filtered(
             lambda p: p.picking_type_id.yaguven_reabast_paso == 'recepcion'
             and p.state not in ('done', 'cancel'))
