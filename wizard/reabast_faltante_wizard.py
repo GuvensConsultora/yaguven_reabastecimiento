@@ -52,10 +52,18 @@ class ReabastFaltanteWizard(models.TransientModel):
                 ln.asignado_qty = asign[ln]
 
     def _disponible(self, picking, producto):
-        """On-hand físico del producto en el origen de la recolección (Central/Existencias)."""
+        """Libre real en el origen de la recolección (Central/Existencias): on-hand menos lo ya
+        reservado por OTRAS recolecciones en curso. No resta la reserva de esta misma recolección
+        (si el despachador ya la reservó antes de abrir "Resolver reparto", esa cantidad sigue
+        disponible para ella). Ejercicio 3 de tensión funcional, 2026-07-19: sumar solo `quantity`
+        hacía que una recolección concurrente creyera disponible stock que otra ya se había
+        reservado."""
         quants = self.env['stock.quant'].with_company(picking.company_id).search([
             ('location_id', '=', picking.location_id.id), ('product_id', '=', producto.id)])
-        return sum(quants.mapped('quantity'))
+        propio = sum(picking.move_ids.filtered(
+            lambda m: m.product_id == producto and m.state not in ('done', 'cancel')
+        ).mapped('quantity'))
+        return sum(quants.mapped('quantity')) - sum(quants.mapped('reserved_quantity')) + propio
 
     def _warehouse_de_transito(self, transito):
         """Sucursal (almacén) dueña de una ubicación de tránsito, vía su tipo de recepción."""
