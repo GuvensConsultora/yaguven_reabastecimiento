@@ -97,6 +97,7 @@
                             <field name="max_qty" column_invisible="parent.origen != 'minmax'"/>
                             <field name="product_uom_qty" string="Se pide"/>
                             <field name="stock_central"/>
+                            <field name="aviso_central" string="Aviso" decoration-warning="aviso_central"/>
                             <field name="product_uom_id"/>
                         </list>
                     </field>

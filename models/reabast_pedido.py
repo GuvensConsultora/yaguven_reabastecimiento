@@ -147,8 +147,10 @@ class ReabastPedido(models.Model):
             if not candidatos:
                 continue
 
-            # se eligen por urgencia, pero se muestran por rubro y nombre: góndola por góndola
-            candidatos.sort(key=lambda c: (c[1].product_id.categ_id.complete_name or '',
+            # se eligen por urgencia, pero se muestran por código: el código agrupa por familia
+            # (07.02 látex, 08.04 Plavicon…) y así se cuenta góndola por góndola. La categoría no
+            # sirve: en Lupatini todos los productos están en «Todos» (medido 23/09, O17 y O19).
+            candidatos.sort(key=lambda c: (c[1].product_id.default_code or '',
                                            c[1].product_id.name or ''))
             lineas = []
             for seq, (_urg, op) in enumerate(candidatos, 1):
@@ -380,6 +382,9 @@ class ReabastPedidoLine(models.Model):
     stock_central = fields.Float(string='Hay en Central', compute='_compute_stock_central',
         help='Stock hoy en Existencias de Central (y sus sububicaciones).')
 
+    aviso_central = fields.Char(string='Central', compute='_compute_stock_central',
+        help='Aviso cuando Central no tiene el producto: no se puede mandar, hay que comprarlo.')
+
     def _compute_stock_central(self):
         # mismo criterio que el conteo de Central: child_of del origen de la recolección y con
         # todas las empresas activas para no perder valores company_dependent (C.1)
@@ -392,6 +397,8 @@ class ReabastPedidoLine(models.Model):
         por_prod = {prod.id: qty for prod, qty in grupos}
         for ln in self:
             ln.stock_central = por_prod.get(ln.product_id.id, 0.0)
+            ln.aviso_central = _('▲ Central no tiene: hay que comprarlo') \
+                if ln.stock_central <= 0 else False
 
     @api.depends('contado', 'conteo_sucursal', 'stock_sistema')
     def _compute_diferencia(self):
