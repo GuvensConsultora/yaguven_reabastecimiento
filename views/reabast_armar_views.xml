@@ -17,6 +17,18 @@
                     sucursal(es) en <strong>una recolección</strong> (Central) más un
                     <strong>despacho por sucursal</strong>. Los pedidos quedan «Procesado».
                 </p>
+                <div class="alert alert-warning" role="alert" invisible="borradores == 0">
+                    Hay <strong><field name="borradores" nolabel="1" class="oe_inline"/></strong>
+                    pedido(s) <strong>en borrador</strong> —pendientes de recolecciones anteriores—
+                    que <strong>no</strong> entran en ésta. Si todavía hacen falta, enviálos antes de armar.
+                    <field name="borrador_ids" nolabel="1" readonly="1">
+                        <list>
+                            <field name="name"/>
+                            <field name="sucursal_id"/>
+                            <field name="fecha"/>
+                        </list>
+                    </field>
+                </div>
                 <field name="pedido_ids" nolabel="1">
                     <list>
                         <field name="name"/>
