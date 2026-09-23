@@ -39,14 +39,19 @@
                     </div>
                     <field name="origen" invisible="1"/>
                     <field name="line_ids" readonly="state != 'borrador'" nolabel="1">
-                        <list editable="bottom" create="0" delete="0">
+                        <!-- una sola página (limit) para que no queden filas escondidas; anchos
+                             fijos para que ningún título se corte -->
+                        <list editable="bottom" create="0" delete="0" limit="200">
                             <field name="sequence" column_invisible="1"/>
                             <field name="orderpoint_id" column_invisible="1"/>
+                            <field name="contado" column_invisible="1"/>
                             <field name="product_id" string="Producto" readonly="1"
                                    options="{'no_open': True}"/>
-                            <field name="conteo_sucursal" string="¿Cuántos hay en el local?"/>
-                            <field name="contado" string="Contado" widget="boolean" readonly="1"/>
-                            <field name="aviso_central" string="Aviso" readonly="1"
+                            <field name="conteo_sucursal" string="¿Cuántos hay en el local?"
+                                   digits="[16, 0]" width="200px"/>
+                            <field name="estado_conteo" string="Estado" width="140px"
+                                   decoration-muted="contado"/>
+                            <field name="aviso_central" string="Aviso" readonly="1" width="320px"
                                    decoration-warning="aviso_central"/>
                         </list>
                     </field>

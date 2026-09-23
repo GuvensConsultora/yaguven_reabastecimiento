@@ -372,6 +372,7 @@ class ReabastPedidoLine(models.Model):
     conteo_sucursal = fields.Float(string='¿Cuántos hay en el local?')
     contado = fields.Boolean(string='Contado', readonly=True, copy=False,
         help='La sucursal ya anotó cuántos hay (un 0 escrito también cuenta).')
+    estado_conteo = fields.Char(string='Estado', compute='_compute_estado_conteo')
     stock_sistema = fields.Float(string='Decía el sistema', readonly=True)
     diferencia = fields.Float(string='Diferencia', compute='_compute_diferencia',
         help='Contó la sucursal menos lo que decía el sistema.')
@@ -404,6 +405,12 @@ class ReabastPedidoLine(models.Model):
     def _compute_diferencia(self):
         for ln in self:
             ln.diferencia = ln.conteo_sucursal - ln.stock_sistema if ln.contado else 0.0
+
+    @api.depends('contado')
+    def _compute_estado_conteo(self):
+        # texto con forma distinta en cada estado: se lee sin depender del color
+        for ln in self:
+            ln.estado_conteo = _('✔ Listo') if ln.contado else _('● Falta contar')
 
     def _cantidad_por_conteo(self, conteo):
         """Se pide lo que falta para el máximo, sobre lo que HAY de verdad y lo que ya viene."""

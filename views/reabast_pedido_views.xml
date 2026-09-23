@@ -79,26 +79,26 @@
                     <field name="line_ids" readonly="state != 'borrador'">
                         <!-- en un pedido de mín/máx, Central ve de dónde sale cada cantidad:
                              Se pide = Máx − Contó − En camino. «Se pide» sigue editable. -->
-                        <list editable="bottom">
+                        <list editable="bottom" limit="200">
                             <field name="sequence" column_invisible="1"/>
                             <field name="orderpoint_id" column_invisible="1"/>
                             <field name="contado" column_invisible="1"/>
                             <field name="product_id"/>
-                            <field name="conteo_sucursal" string="Contó la sucursal"
+                            <field name="conteo_sucursal" string="Contó" width="70px"
                                    column_invisible="parent.origen != 'minmax'"
                                    invisible="not contado" readonly="1"/>
-                            <field name="stock_sistema" string="Decía el sistema"
+                            <field name="stock_sistema" string="Sistema" width="75px"
                                    column_invisible="parent.origen != 'minmax'"/>
-                            <field name="diferencia"
+                            <field name="diferencia" string="Dif." width="60px"
                                    column_invisible="parent.origen != 'minmax'"
                                    invisible="not contado or diferencia == 0"/>
-                            <field name="en_camino" column_invisible="parent.origen != 'minmax'"/>
-                            <field name="min_qty" column_invisible="parent.origen != 'minmax'"/>
-                            <field name="max_qty" column_invisible="parent.origen != 'minmax'"/>
-                            <field name="product_uom_qty" string="Se pide"/>
-                            <field name="stock_central"/>
-                            <field name="aviso_central" string="Aviso" decoration-warning="aviso_central"/>
-                            <field name="product_uom_id"/>
+                            <field name="en_camino" string="Viene" width="65px" column_invisible="parent.origen != 'minmax'"/>
+                            <field name="min_qty" width="55px" column_invisible="parent.origen != 'minmax'"/>
+                            <field name="max_qty" width="55px" column_invisible="parent.origen != 'minmax'"/>
+                            <field name="product_uom_qty" string="Se pide" width="75px"/>
+                            <field name="stock_central" string="Central" width="70px"/>
+                            <field name="aviso_central" string="Aviso" width="240px" decoration-warning="aviso_central"/>
+                            <field name="product_uom_id" optional="hide"/>
                         </list>
                     </field>
                     <field name="note" placeholder="Observaciones..."/>
