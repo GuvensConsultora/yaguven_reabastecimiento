@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_reabast" model="ir.ui.view">
+        <field name="name">res.config.settings.form.yaguven.reabast</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='warehouse_setting_container']" position="after">
+                <block title="Reabastecimiento de sucursales" name="yaguven_reabast_setting_container">
+                    <setting string="Productos por pedido de mín/máx"
+                             help="Cuántos productos le aparecen a la sucursal para contar en cada pedido. Los que quedan afuera salen en el próximo.">
+                        <field name="yaguven_reabast_tope_minmax"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

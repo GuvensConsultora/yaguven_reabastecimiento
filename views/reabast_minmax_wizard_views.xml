@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_reabast_minmax_wizard_form" model="ir.ui.view">
+        <field name="name">yaguven.reabast.minmax.wizard.form</field>
+        <field name="model">yaguven.reabast.minmax.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Pedir mercadería">
+                <p>Se arma un pedido por sucursal con los productos que el sistema ve bajo el
+                   mínimo. Cada sucursal lo abre desde «Pedir mercadería», cuenta cuántos hay en
+                   el local y lo envía. Si una sucursal ya tenía uno empezado, no se toca.</p>
+                <field name="permitidas_ids" invisible="1"/>
+                <group>
+                    <field name="sucursal_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                </group>
+                <footer>
+                    <button name="action_confirmar" type="object" string="Armar pedidos"
+                            class="oe_highlight"/>
+                    <button string="Cancelar" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

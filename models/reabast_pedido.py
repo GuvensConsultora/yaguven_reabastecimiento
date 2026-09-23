@@ -30,6 +30,15 @@ class ReabastPedido(models.Model):
         string='Estado', default='borrador', required=True, tracking=True,
         help='Borrador (editable) → Enviado (lo toma "Armar recolección") → Procesado / Cancelado.')
     line_ids = fields.One2many('yaguven.reabast.pedido.line', 'pedido_id', string='Líneas')
+    # de dónde salió el pedido: cargado a mano, o generado desde las reglas de mín/máx de la
+    # sucursal (botón «Traer faltantes por mín/máx»). Solo informativo: el circuito es el mismo.
+    origen = fields.Selection(
+        [('manual', 'Manual'), ('minmax', 'Mín/máx')],
+        string='Origen', default='manual', required=True, readonly=True, copy=False,
+        tracking=True)
+    faltan_contar = fields.Integer(
+        string='Faltan contar', compute='_compute_faltan_contar',
+        help='Productos de mín/máx que la sucursal todavía no contó.')
     note = fields.Text(string='Observaciones')
     # vínculo a la recolección consolidada que procesó el pedido (campo en NUESTRO modelo, no en
     # el nativo stock.picking — C.2). Lo setea action_armar_recoleccion (lo invoca el wizard 3b).
@@ -39,6 +48,12 @@ class ReabastPedido(models.Model):
     company_id = fields.Many2one(
         'res.company', string='Compañía', required=True,
         default=lambda self: self.env.company)
+
+    @api.depends('line_ids.contado', 'line_ids.orderpoint_id')
+    def _compute_faltan_contar(self):
+        for pedido in self:
+            pedido.faltan_contar = len(pedido.line_ids.filtered(
+                lambda l: l.orderpoint_id and not l.contado))
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -54,6 +69,11 @@ class ReabastPedido(models.Model):
                 raise UserError(_("Solo se puede enviar un pedido en borrador."))
             if not pedido.line_ids:
                 raise UserError(_("El pedido no tiene líneas: agregá al menos un producto."))
+            sin_contar = pedido.line_ids.filtered(lambda l: l.orderpoint_id and not l.contado)
+            if sin_contar:
+                raise UserError(_(
+                    "Faltan contar %s productos. Anotá cuántos hay en el local "
+                    "(si no hay ninguno, poné 0).") % len(sin_contar))
             pedido.state = 'enviado'
         return True
 
@@ -70,6 +90,132 @@ class ReabastPedido(models.Model):
                 raise UserError(_("Un pedido ya procesado no se puede cancelar."))
             pedido.state = 'cancelado'
         return True
+
+    # ------------------------------------------------------------------
+    # Pedir mercadería por mín/máx — el mín/máx entra al circuito como un pedido más
+    # ------------------------------------------------------------------
+    @api.model
+    def _tope_minmax(self):
+        """Cuántos productos entran como máximo en un pedido de mín/máx: lo que una persona de
+        sucursal puede contar de una vez. Configurable (Inventario › Configuración), no fijo acá."""
+        valor = self.env['ir.config_parameter'].sudo().get_param(
+            'yaguven_reabastecimiento.tope_minmax')
+        return int(valor) if valor and str(valor).isdigit() and int(valor) > 0 else 0
+
+    @api.model
+    def _traer_minmax(self, sucursales):
+        """Por cada sucursal, arma UN pedido en borrador de origen mín/máx con los productos que
+        el sistema ve bajo mínimo, para que la sucursal cuente cuántos hay de verdad en el local.
+
+        - Solo reglas cuya ruta surte desde Existencias de Central (las de «Comprar» quedan afuera).
+        - Entran hasta el tope configurado, los más lejos del mínimo primero; el resto sale en el
+          próximo pedido.
+        - Se descuenta lo que la sucursal ya tiene en otros pedidos en borrador/enviados (Odoo no
+          los ve todavía como movimientos) para no pedir dos veces.
+        - Un borrador de mín/máx que ya existe NO se toca: puede tener conteos cargados.
+        Devuelve (pedidos_nuevos, pedidos_existentes)."""
+        loc_central = self._tipo_recoleccion().default_location_src_id
+        tope = self._tope_minmax()
+        Orderpoint = self.env['stock.warehouse.orderpoint']
+        nuevos = existentes = self.browse()
+        for sucursal in sucursales:
+            existente = self.search([
+                ('sucursal_id', '=', sucursal.id),
+                ('origen', '=', 'minmax'), ('state', '=', 'borrador')], limit=1)
+            if existente:
+                existentes |= existente
+                continue
+
+            ya_pedido = defaultdict(float)
+            for ln in self.search([
+                    ('sucursal_id', '=', sucursal.id),
+                    ('state', 'in', ('borrador', 'enviado'))]).line_ids:
+                ya_pedido[ln.product_id] += ln.product_uom_qty
+
+            candidatos = []
+            for op in Orderpoint.search([
+                    ('warehouse_id', '=', sucursal.id),
+                    ('route_id.rule_ids.location_src_id', '=', loc_central.id)]):
+                if op.qty_to_order <= 0 or ya_pedido[op.product_id] >= op.qty_to_order:
+                    continue
+                # urgencia: cuánto le falta para el mínimo, relativo al propio mínimo
+                urgencia = (op.product_min_qty - op.qty_forecast) / max(op.product_min_qty, 1)
+                candidatos.append((urgencia, op))
+            candidatos.sort(key=lambda c: c[0], reverse=True)
+            if tope:
+                candidatos = candidatos[:tope]
+            if not candidatos:
+                continue
+
+            # se eligen por urgencia, pero se muestran por rubro y nombre: góndola por góndola
+            candidatos.sort(key=lambda c: (c[1].product_id.categ_id.complete_name or '',
+                                           c[1].product_id.name or ''))
+            lineas = []
+            for seq, (_urg, op) in enumerate(candidatos, 1):
+                en_camino = max(op.qty_forecast - op.qty_on_hand, 0.0) + ya_pedido[op.product_id]
+                lineas.append((0, 0, {
+                    'sequence': seq,
+                    'product_id': op.product_id.id,
+                    'orderpoint_id': op.id,
+                    'stock_sistema': op.qty_on_hand,
+                    'en_camino': en_camino,
+                    'min_qty': op.product_min_qty,
+                    'max_qty': op.product_max_qty,
+                    # propuesta inicial con el stock del sistema; se recalcula al contar
+                    'product_uom_qty': max(op.product_max_qty - op.qty_on_hand - en_camino, 0.0),
+                }))
+            nuevos |= self.create({
+                'sucursal_id': sucursal.id, 'origen': 'minmax',
+                'company_id': sucursal.company_id.id, 'line_ids': lineas,
+            })
+        return nuevos, existentes
+
+    @api.model
+    def _sucursales_del_usuario(self):
+        """Sucursales que el usuario puede pedir: las de sus Unidades Operativas que tienen
+        circuito de reabastecimiento (tipo de Recepción REAB). Así Central y los móviles quedan
+        afuera sin nombrarlos."""
+        recep = self.env['stock.picking.type'].search([('yaguven_reabast_paso', '=', 'recepcion')])
+        sucursales = recep.warehouse_id
+        if not self.env.user.has_group('yaguven_reabastecimiento.group_reabast_supervisor'):
+            sucursales = sucursales.filtered(
+                lambda w: w.operating_unit_id in self.env.user.operating_unit_ids)
+        return sucursales
+
+    @api.model
+    def action_pedir_mercaderia(self):
+        """Menú «Pedir mercadería». Una sucursal → abre directo su pedido para contar.
+        Varias (Central) → ventana para elegir cuáles (ver _accion_elegir_sucursales)."""
+        sucursales = self._sucursales_del_usuario()
+        if not sucursales:
+            raise UserError(_(
+                "Tu usuario no tiene una sucursal asignada para pedir mercadería. "
+                "Pedile a Central que te la asigne."))
+        if len(sucursales) > 1:
+            return self._accion_elegir_sucursales(sucursales)
+        nuevos, existentes = self._traer_minmax(sucursales)
+        pedido = nuevos or existentes
+        if not pedido:
+            return {
+                'type': 'ir.actions.client', 'tag': 'display_notification',
+                'params': {'type': 'info', 'sticky': False,
+                           'title': _('No hace falta pedir nada'),
+                           'message': _('Según el sistema, a tu sucursal no le falta nada hoy.')},
+            }
+        return pedido._accion_abrir_conteo()
+
+    def _accion_abrir_conteo(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Pedir mercadería'),
+            'res_model': 'yaguven.reabast.pedido',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'views': [(self.env.ref('yaguven_reabastecimiento.view_reabast_pedido_form_conteo').id,
+                       'form')],
+            'target': 'current',
+        }
 
     # ------------------------------------------------------------------
     # Armar recolección (Etapa 3b) — motor invocado por el wizard de confirmación
@@ -128,7 +274,7 @@ class ReabastPedido(models.Model):
         total_prod = defaultdict(float)
         suc_prod = defaultdict(lambda: defaultdict(float))
         for ped in pedidos:
-            for ln in ped.line_ids:
+            for ln in ped.line_ids.filtered(lambda l: l.product_uom_qty > 0):
                 total_prod[ln.product_id] += ln.product_uom_qty
                 suc_prod[ped.sucursal_id][ln.product_id] += ln.product_uom_qty
 
@@ -202,6 +348,11 @@ class ReabastPedido(models.Model):
 class ReabastPedidoLine(models.Model):
     _name = 'yaguven.reabast.pedido.line'
     _description = 'Línea de pedido de reabastecimiento'
+    _order = 'pedido_id, sequence, id'
+
+    sequence = fields.Integer(string='Orden', default=10)
+    categ_id = fields.Many2one(
+        'product.category', string='Rubro', related='product_id.categ_id', readonly=True)
 
     pedido_id = fields.Many2one(
         'yaguven.reabast.pedido', string='Pedido', required=True, ondelete='cascade', index=True)
@@ -211,3 +362,55 @@ class ReabastPedidoLine(models.Model):
     product_uom_qty = fields.Float(string='Cantidad', default=1.0, required=True)
     product_uom_id = fields.Many2one(
         'uom.uom', string='UdM', related='product_id.uom_id', readonly=True)
+
+    # --- líneas de mín/máx: la foto del momento en que se armó el pedido (para Central) y el
+    #     conteo real de la sucursal. En un pedido manual quedan vacíos.
+    orderpoint_id = fields.Many2one(
+        'stock.warehouse.orderpoint', string='Regla mín/máx', readonly=True, ondelete='set null')
+    conteo_sucursal = fields.Float(string='¿Cuántos hay en el local?')
+    contado = fields.Boolean(string='Contado', readonly=True, copy=False,
+        help='La sucursal ya anotó cuántos hay (un 0 escrito también cuenta).')
+    stock_sistema = fields.Float(string='Decía el sistema', readonly=True)
+    diferencia = fields.Float(string='Diferencia', compute='_compute_diferencia',
+        help='Contó la sucursal menos lo que decía el sistema.')
+    en_camino = fields.Float(string='En camino', readonly=True,
+        help='Ya pedido o despachado y todavía no recibido en la sucursal.')
+    min_qty = fields.Float(string='Mín', readonly=True)
+    max_qty = fields.Float(string='Máx', readonly=True)
+    stock_central = fields.Float(string='Hay en Central', compute='_compute_stock_central',
+        help='Stock hoy en Existencias de Central (y sus sububicaciones).')
+
+    def _compute_stock_central(self):
+        # mismo criterio que el conteo de Central: child_of del origen de la recolección y con
+        # todas las empresas activas para no perder valores company_dependent (C.1)
+        tipo = self.env['yaguven.reabast.pedido']._tipo_recoleccion()
+        loc = tipo.default_location_src_id
+        comps = self.env['res.company'].search([]).ids
+        grupos = self.env['stock.quant'].with_context(allowed_company_ids=comps)._read_group(
+            [('product_id', 'in', self.product_id.ids), ('location_id', 'child_of', loc.id)],
+            ['product_id'], ['quantity:sum'])
+        por_prod = {prod.id: qty for prod, qty in grupos}
+        for ln in self:
+            ln.stock_central = por_prod.get(ln.product_id.id, 0.0)
+
+    @api.depends('contado', 'conteo_sucursal', 'stock_sistema')
+    def _compute_diferencia(self):
+        for ln in self:
+            ln.diferencia = ln.conteo_sucursal - ln.stock_sistema if ln.contado else 0.0
+
+    def _cantidad_por_conteo(self, conteo):
+        """Se pide lo que falta para el máximo, sobre lo que HAY de verdad y lo que ya viene."""
+        self.ensure_one()
+        return max(self.max_qty - conteo - self.en_camino, 0.0)
+
+    def write(self, vals):
+        if 'conteo_sucursal' not in vals:
+            return super().write(vals)
+        vals = dict(vals, contado=True)
+        for ln in self:
+            v = dict(vals)
+            # Central puede corregir «Se pide» a mano: si lo manda junto, gana lo que escribió
+            if ln.orderpoint_id and 'product_uom_qty' not in vals:
+                v['product_uom_qty'] = ln._cantidad_por_conteo(vals['conteo_sucursal'])
+            super(ReabastPedidoLine, ln).write(v)
+        return True

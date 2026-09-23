@@ -10,6 +10,9 @@
                 <field name="sucursal_id"/>
                 <filter name="f_borrador" string="Borrador" domain="[('state', '=', 'borrador')]"/>
                 <filter name="f_enviado" string="Enviados" domain="[('state', '=', 'enviado')]"/>
+                <separator/>
+                <filter name="f_minmax" string="Mín/máx" domain="[('origen', '=', 'minmax')]"/>
+                <filter name="f_sin_contar" string="Sin terminar de contar" domain="[('origen', '=', 'minmax'), ('state', '=', 'borrador')]"/>
                 <!-- O19: el group de "Agrupar por" va plano, sin expand= ni string= (ver knowledge §7b) -->
                 <group name="group_by">
                     <filter name="g_sucursal" string="Sucursal" context="{'group_by': 'sucursal_id'}"/>
@@ -29,6 +32,9 @@
                 <field name="sucursal_id"/>
                 <field name="fecha"/>
                 <field name="user_id"/>
+                <field name="origen"/>
+                <field name="faltan_contar" string="Faltan contar"
+                       invisible="origen != 'minmax' or state != 'borrador'"/>
                 <field name="state" widget="badge"
                        decoration-info="state == 'borrador'"
                        decoration-warning="state == 'enviado'"
@@ -64,14 +70,33 @@
                             <field name="company_id" invisible="1"/>
                         </group>
                         <group>
+                            <field name="origen"/>
+                            <field name="faltan_contar" invisible="origen != 'minmax' or state != 'borrador'"/>
                             <field name="fecha" readonly="state != 'borrador'"/>
                             <field name="user_id"/>
                         </group>
                     </group>
                     <field name="line_ids" readonly="state != 'borrador'">
+                        <!-- en un pedido de mín/máx, Central ve de dónde sale cada cantidad:
+                             Se pide = Máx − Contó − En camino. «Se pide» sigue editable. -->
                         <list editable="bottom">
+                            <field name="sequence" column_invisible="1"/>
+                            <field name="orderpoint_id" column_invisible="1"/>
+                            <field name="contado" column_invisible="1"/>
                             <field name="product_id"/>
-                            <field name="product_uom_qty"/>
+                            <field name="conteo_sucursal" string="Contó la sucursal"
+                                   column_invisible="parent.origen != 'minmax'"
+                                   invisible="not contado" readonly="1"/>
+                            <field name="stock_sistema" string="Decía el sistema"
+                                   column_invisible="parent.origen != 'minmax'"/>
+                            <field name="diferencia"
+                                   column_invisible="parent.origen != 'minmax'"
+                                   invisible="not contado or diferencia == 0"/>
+                            <field name="en_camino" column_invisible="parent.origen != 'minmax'"/>
+                            <field name="min_qty" column_invisible="parent.origen != 'minmax'"/>
+                            <field name="max_qty" column_invisible="parent.origen != 'minmax'"/>
+                            <field name="product_uom_qty" string="Se pide"/>
+                            <field name="stock_central"/>
                             <field name="product_uom_id"/>
                         </list>
                     </field>

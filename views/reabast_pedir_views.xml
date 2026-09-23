@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        «Pedir mercadería» (sucursal): una sola pregunta por producto, sobre lo que la persona
+        tiene enfrente. No se muestran mínimos, máximos ni stock del sistema: la cuenta la hace
+        el modelo (_cantidad_por_conteo). El detalle para Central va en el formulario general.
+    -->
+    <record id="view_reabast_pedido_form_conteo" model="ir.ui.view">
+        <field name="name">yaguven.reabast.pedido.form.conteo</field>
+        <field name="model">yaguven.reabast.pedido</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <form string="Pedir mercadería" create="0" delete="0">
+                <header>
+                    <button name="action_enviar" type="object" string="Enviar a Central"
+                            class="oe_highlight" invisible="state != 'borrador'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="borrador,enviado,procesado"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-info" role="status"
+                         invisible="state != 'borrador' or faltan_contar == 0">
+                        <strong>● Anotá cuántos hay de cada producto en el local.</strong>
+                        Si no hay ninguno, poné 0. Te faltan contar
+                        <field name="faltan_contar" class="fw-bold"/> productos.
+                    </div>
+                    <div class="alert alert-info" role="status"
+                         invisible="state != 'borrador' or faltan_contar != 0">
+                        <strong>● Ya contaste todo.</strong> Apretá «Enviar a Central».
+                    </div>
+                    <div class="alert alert-warning" role="status" invisible="state != 'enviado'">
+                        <strong>▲ Enviado.</strong> Central lo va a preparar en la próxima recolección.
+                    </div>
+                    <div class="alert alert-warning" role="status" invisible="state != 'procesado'">
+                        <strong>▲ En preparación.</strong> Cuando llegue, lo vas a ver en Recepciones.
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="sucursal_id" readonly="1" options="{'no_open': True}"/></h1>
+                        <field name="name" readonly="1"/>
+                    </div>
+                    <field name="origen" invisible="1"/>
+                    <field name="line_ids" readonly="state != 'borrador'" nolabel="1">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="sequence" column_invisible="1"/>
+                            <field name="orderpoint_id" column_invisible="1"/>
+                            <field name="categ_id" string="Rubro" readonly="1"/>
+                            <field name="product_id" string="Producto" readonly="1"
+                                   options="{'no_open': True}"/>
+                            <field name="conteo_sucursal" string="¿Cuántos hay en el local?"/>
+                            <field name="contado" string="Contado" widget="boolean" readonly="1"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reabast_pedir" model="ir.actions.server">
+        <field name="name">Pedir mercadería</field>
+        <field name="model_id" ref="model_yaguven_reabast_pedido"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_pedir_mercaderia()</field>
+    </record>
+
+    <menuitem id="menu_reabast_pedir"
+              name="Pedir mercadería"
+              parent="menu_reabast_root"
+              action="action_reabast_pedir"
+              sequence="3"
+              groups="group_reabast_recepcionista,group_reabast_supervisor"/>
+</odoo>
