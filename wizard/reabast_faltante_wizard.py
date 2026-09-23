@@ -112,7 +112,23 @@ class ReabastFaltanteWizard(models.TransientModel):
     # Estrategias de reparto. items = [{'key','pedido','orden'}]; devuelve {key: cantidad}.
     # Si el disponible alcanza, asigna el pedido completo (sin faltante).
     # ------------------------------------------------------------------
+    def _paso_reparto(self, disponible, items, rounding):
+        """Con cuánto se reparte: entero o el redondeo de la UdM.
+
+        El prorrateo devolvía 4,34 / 4,33 / 4,33 latas al repartir 13 entre tres pedidos de 8,
+        porque la UdM «Unidades» trae redondeo 0,01 (el default de Odoo, y en esta base lo tienen
+        TODAS las unidades). A una sucursal no se le despacha media lata. Caso 2026-09-23.
+
+        La regla no mira la UdM sino los números: si lo pedido y lo disponible son enteros, el
+        reparto también sale entero; si el producto se mueve con decimales de verdad (kilos,
+        litros, metros), se respeta su redondeo.
+        """
+        entero = all(float(x).is_integer() for x in
+                     [disponible] + [it['pedido'] for it in items])
+        return 1.0 if entero else (rounding or 1.0)
+
     def _calc_reparto(self, estrategia, disponible, items, rounding):
+        rounding = self._paso_reparto(disponible, items, rounding)
         total = sum(it['pedido'] for it in items)
         if total <= 0:
             return {it['key']: 0.0 for it in items}
