@@ -51,12 +51,11 @@
                                    digits="[16, 0]" width="200px"/>
                             <field name="estado_conteo" string="Estado" width="140px"
                                    decoration-muted="contado"/>
-                            <field name="aviso_central" string="Aviso" readonly="1" width="320px"
+                            <field name="aviso_central" string="Aviso" readonly="1" width="260px"
                                    decoration-warning="aviso_central"/>
                         </list>
                     </field>
                 </sheet>
-                <chatter/>
             </form>
         </field>
     </record>

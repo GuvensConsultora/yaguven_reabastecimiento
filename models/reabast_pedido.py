@@ -398,7 +398,7 @@ class ReabastPedidoLine(models.Model):
         por_prod = {prod.id: qty for prod, qty in grupos}
         for ln in self:
             ln.stock_central = por_prod.get(ln.product_id.id, 0.0)
-            ln.aviso_central = _('▲ Central no tiene: hay que comprarlo') \
+            ln.aviso_central = _('▲ No hay en Central: se compra') \
                 if ln.stock_central <= 0 else False
 
     @api.depends('contado', 'conteo_sucursal', 'stock_sistema')

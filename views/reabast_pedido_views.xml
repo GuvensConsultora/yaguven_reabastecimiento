@@ -83,7 +83,7 @@
                             <field name="sequence" column_invisible="1"/>
                             <field name="orderpoint_id" column_invisible="1"/>
                             <field name="contado" column_invisible="1"/>
-                            <field name="product_id"/>
+                            <field name="product_id" width="300px"/>
                             <field name="conteo_sucursal" string="Contó" width="70px"
                                    column_invisible="parent.origen != 'minmax'"
                                    invisible="not contado" readonly="1"/>
@@ -97,7 +97,7 @@
                             <field name="max_qty" width="55px" column_invisible="parent.origen != 'minmax'"/>
                             <field name="product_uom_qty" string="Se pide" width="75px"/>
                             <field name="stock_central" string="Central" width="70px"/>
-                            <field name="aviso_central" string="Aviso" width="240px" decoration-warning="aviso_central"/>
+                            <field name="aviso_central" string="Aviso" width="230px" decoration-warning="aviso_central"/>
                             <field name="product_uom_id" optional="hide"/>
                         </list>
                     </field>
