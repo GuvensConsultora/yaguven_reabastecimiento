@@ -7,4 +7,31 @@
             <field name="value">50</field>
         </record>
     </data>
+    <!-- regla de mín/máx sugeridos por ventas, decidida por el usuario el 2026-09-24 -->
+    <data noupdate="1">
+        <record id="param_minmax_dias_ventas" model="ir.config_parameter">
+            <field name="key">yaguven_reabastecimiento.minmax_dias_ventas</field>
+            <field name="value">90</field>
+        </record>
+        <record id="param_minmax_umbral_mes" model="ir.config_parameter">
+            <field name="key">yaguven_reabastecimiento.minmax_umbral_mes</field>
+            <field name="value">3</field>
+        </record>
+        <record id="param_minmax_margen_dias" model="ir.config_parameter">
+            <field name="key">yaguven_reabastecimiento.minmax_margen_dias</field>
+            <field name="value">1</field>
+        </record>
+        <record id="param_minmax_factor_max" model="ir.config_parameter">
+            <field name="key">yaguven_reabastecimiento.minmax_factor_max</field>
+            <field name="value">2</field>
+        </record>
+        <record id="param_minmax_poca_min" model="ir.config_parameter">
+            <field name="key">yaguven_reabastecimiento.minmax_poca_min</field>
+            <field name="value">1</field>
+        </record>
+        <record id="param_minmax_poca_max" model="ir.config_parameter">
+            <field name="key">yaguven_reabastecimiento.minmax_poca_max</field>
+            <field name="value">2</field>
+        </record>
+    </data>
 </odoo>

@@ -11,6 +11,17 @@
                              help="Cuántos productos le aparecen a la sucursal para contar en cada pedido. Los que quedan afuera salen en el próximo.">
                         <field name="yaguven_reabast_tope_minmax"/>
                     </setting>
+                    <setting string="Mínimos y máximos sugeridos por ventas"
+                             help="El cálculo semanal deja sugeridos en cada regla; Central los aplica con «Aplicar sugerido». Los días entre llegadas se cargan en cada sucursal.">
+                        <div class="content-group">
+                            <div class="row mt8"><label for="yaguven_minmax_dias_ventas" class="col-lg-6"/><field name="yaguven_minmax_dias_ventas"/></div>
+                            <div class="row"><label for="yaguven_minmax_umbral_mes" class="col-lg-6"/><field name="yaguven_minmax_umbral_mes"/></div>
+                            <div class="row"><label for="yaguven_minmax_margen_dias" class="col-lg-6"/><field name="yaguven_minmax_margen_dias"/></div>
+                            <div class="row"><label for="yaguven_minmax_factor_max" class="col-lg-6"/><field name="yaguven_minmax_factor_max"/></div>
+                            <div class="row"><label for="yaguven_minmax_poca_min" class="col-lg-6"/><field name="yaguven_minmax_poca_min"/></div>
+                            <div class="row"><label for="yaguven_minmax_poca_max" class="col-lg-6"/><field name="yaguven_minmax_poca_max"/></div>
+                        </div>
+                    </setting>
                 </block>
             </xpath>
         </field>

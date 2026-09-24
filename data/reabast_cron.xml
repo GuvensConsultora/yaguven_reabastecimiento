@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Instalados APAGADOS a propósito: se encienden cuando el negocio decida (Inventario ›
+        Configuración › Técnico › Acciones planificadas). noupdate: una actualización del módulo
+        no los vuelve a apagar ni a prender.
+    -->
+    <data noupdate="1">
+        <record id="cron_pedidos_automaticos" model="ir.cron">
+            <field name="name">Reabastecimiento: pedidos automáticos en borrador</field>
+            <field name="model_id" ref="model_yaguven_reabast_pedido"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_pedidos_automaticos()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="False"/>
+        </record>
+        <record id="cron_recalcular_minmax" model="ir.cron">
+            <field name="name">Reabastecimiento: mínimos y máximos sugeridos por ventas</field>
+            <field name="model_id" ref="stock.model_stock_warehouse_orderpoint"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_recalcular_minmax()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">weeks</field>
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+</odoo>

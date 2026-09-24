@@ -30,10 +30,11 @@ class ReabastPedido(models.Model):
         string='Estado', default='borrador', required=True, tracking=True,
         help='Borrador (editable) → Enviado (lo toma "Armar recolección") → Procesado / Cancelado.')
     line_ids = fields.One2many('yaguven.reabast.pedido.line', 'pedido_id', string='Líneas')
-    # de dónde salió el pedido: cargado a mano, o generado desde las reglas de mín/máx de la
-    # sucursal (botón «Traer faltantes por mín/máx»). Solo informativo: el circuito es el mismo.
+    # de dónde salió el pedido: cargado a mano; generado desde las reglas de mín/máx para que la
+    # sucursal cuente (botón «Pedir mercadería»); o armado solo por el proceso diario, en borrador
+    # para que Central lo revise (acordado con Anael 23/09: la sucursal no cuenta ni maneja mín/máx).
     origen = fields.Selection(
-        [('manual', 'Manual'), ('minmax', 'Mín/máx')],
+        [('manual', 'Manual'), ('minmax', 'Mín/máx'), ('auto', 'Automático')],
         string='Origen', default='manual', required=True, readonly=True, copy=False,
         tracking=True)
     faltan_contar = fields.Integer(
@@ -49,11 +50,11 @@ class ReabastPedido(models.Model):
         'res.company', string='Compañía', required=True,
         default=lambda self: self.env.company)
 
-    @api.depends('line_ids.contado', 'line_ids.orderpoint_id')
+    @api.depends('origen', 'line_ids.contado', 'line_ids.orderpoint_id')
     def _compute_faltan_contar(self):
         for pedido in self:
             pedido.faltan_contar = len(pedido.line_ids.filtered(
-                lambda l: l.orderpoint_id and not l.contado))
+                lambda l: l.orderpoint_id and not l.contado)) if pedido.origen == 'minmax' else 0
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -69,7 +70,8 @@ class ReabastPedido(models.Model):
                 raise UserError(_("Solo se puede enviar un pedido en borrador."))
             if not pedido.line_ids:
                 raise UserError(_("El pedido no tiene líneas: agregá al menos un producto."))
-            sin_contar = pedido.line_ids.filtered(lambda l: l.orderpoint_id and not l.contado)
+            sin_contar = pedido.line_ids.filtered(lambda l: l.orderpoint_id and not l.contado) \
+                if pedido.origen == 'minmax' else pedido.line_ids.browse()
             if sin_contar:
                 raise UserError(_(
                     "Faltan contar %s productos. Anotá cuántos hay en el local "
@@ -103,6 +105,85 @@ class ReabastPedido(models.Model):
         return int(valor) if valor and str(valor).isdigit() and int(valor) > 0 else 0
 
     @api.model
+    def _candidatos_minmax(self, sucursal):
+        """Lo que le falta a una sucursal según sus reglas que se surten desde Central, más
+        urgente primero. Lo usan los dos caminos: el pedido para contar y el automático.
+
+        - Solo reglas cuya ruta surte desde Existencias de Central (las de «Comprar» quedan afuera).
+        - Se descuenta lo que la sucursal ya tiene en pedidos en borrador/enviados (Odoo no los
+          ve todavía como movimientos) para no pedir dos veces.
+        Devuelve ([(urgencia, regla)], {producto: cantidad ya pedida})."""
+        loc_central = self._tipo_recoleccion().default_location_src_id
+        ya_pedido = defaultdict(float)
+        for ln in self.search([
+                ('sucursal_id', '=', sucursal.id),
+                ('state', 'in', ('borrador', 'enviado'))]).line_ids:
+            ya_pedido[ln.product_id] += ln.product_uom_qty
+        candidatos = []
+        for op in self.env['stock.warehouse.orderpoint'].search([
+                ('warehouse_id', '=', sucursal.id),
+                ('route_id.rule_ids.location_src_id', '=', loc_central.id)]):
+            if op.qty_to_order <= 0 or ya_pedido[op.product_id] >= op.qty_to_order:
+                continue
+            # urgencia: cuánto le falta para el mínimo, relativo al propio mínimo
+            urgencia = (op.product_min_qty - op.qty_forecast) / max(op.product_min_qty, 1)
+            candidatos.append((urgencia, op))
+        candidatos.sort(key=lambda c: c[0], reverse=True)
+        return candidatos, ya_pedido
+
+    @api.model
+    def _linea_desde_regla(self, op, ya_pedido, seq):
+        en_camino = max(op.qty_forecast - op.qty_on_hand, 0.0) + ya_pedido[op.product_id]
+        return (0, 0, {
+            'sequence': seq,
+            'product_id': op.product_id.id,
+            'orderpoint_id': op.id,
+            'stock_sistema': op.qty_on_hand,
+            'en_camino': en_camino,
+            'min_qty': op.product_min_qty,
+            'max_qty': op.product_max_qty,
+            # con el stock del sistema; en el pedido para contar se recalcula al contar
+            'product_uom_qty': max(op.product_max_qty - op.qty_on_hand - en_camino, 0.0),
+        })
+
+    @api.model
+    def _cron_pedidos_automaticos(self):
+        """Proceso diario: por cada sucursal con circuito de reabastecimiento, deja en BORRADOR
+        un pedido «Automático» con lo que está bajo el mínimo, para que Central lo revise y lo
+        envíe. Sin conteo y sin tope: la revisión es de Central.
+
+        Si la sucursal ya tiene un borrador automático sin enviar, sólo se le AGREGAN los productos
+        que no tiene: las cantidades que Central ya corrigió no se pisan."""
+        recep = self.env['stock.picking.type'].search([('yaguven_reabast_paso', '=', 'recepcion')])
+        creados = actualizados = self.browse()
+        for sucursal in recep.warehouse_id:
+            candidatos, ya_pedido = self._candidatos_minmax(sucursal)
+            existente = self.search([
+                ('sucursal_id', '=', sucursal.id),
+                ('origen', '=', 'auto'), ('state', '=', 'borrador')], limit=1)
+            if existente:
+                ya_esta = existente.line_ids.product_id
+                candidatos = [c for c in candidatos if c[1].product_id not in ya_esta]
+            if not candidatos:
+                continue
+            candidatos.sort(key=lambda c: (c[1].product_id.default_code or '',
+                                           c[1].product_id.name or ''))
+            base = max(existente.line_ids.mapped('sequence') or [0])
+            lineas = [self._linea_desde_regla(op, ya_pedido, base + i)
+                      for i, (_u, op) in enumerate(candidatos, 1)]
+            if existente:
+                existente.line_ids = lineas
+                existente.message_post(body=_(
+                    "El proceso automático agregó %s productos bajo el mínimo.") % len(lineas))
+                actualizados |= existente
+            else:
+                creados |= self.create({
+                    'sucursal_id': sucursal.id, 'origen': 'auto',
+                    'company_id': sucursal.company_id.id, 'line_ids': lineas,
+                })
+        return creados, actualizados
+
+    @api.model
     def _traer_minmax(self, sucursales):
         """Por cada sucursal, arma UN pedido en borrador de origen mín/máx con los productos que
         el sistema ve bajo mínimo, para que la sucursal cuente cuántos hay de verdad en el local.
@@ -114,9 +195,7 @@ class ReabastPedido(models.Model):
           los ve todavía como movimientos) para no pedir dos veces.
         - Un borrador de mín/máx que ya existe NO se toca: puede tener conteos cargados.
         Devuelve (pedidos_nuevos, pedidos_existentes)."""
-        loc_central = self._tipo_recoleccion().default_location_src_id
         tope = self._tope_minmax()
-        Orderpoint = self.env['stock.warehouse.orderpoint']
         nuevos = existentes = self.browse()
         for sucursal in sucursales:
             existente = self.search([
@@ -126,22 +205,7 @@ class ReabastPedido(models.Model):
                 existentes |= existente
                 continue
 
-            ya_pedido = defaultdict(float)
-            for ln in self.search([
-                    ('sucursal_id', '=', sucursal.id),
-                    ('state', 'in', ('borrador', 'enviado'))]).line_ids:
-                ya_pedido[ln.product_id] += ln.product_uom_qty
-
-            candidatos = []
-            for op in Orderpoint.search([
-                    ('warehouse_id', '=', sucursal.id),
-                    ('route_id.rule_ids.location_src_id', '=', loc_central.id)]):
-                if op.qty_to_order <= 0 or ya_pedido[op.product_id] >= op.qty_to_order:
-                    continue
-                # urgencia: cuánto le falta para el mínimo, relativo al propio mínimo
-                urgencia = (op.product_min_qty - op.qty_forecast) / max(op.product_min_qty, 1)
-                candidatos.append((urgencia, op))
-            candidatos.sort(key=lambda c: c[0], reverse=True)
+            candidatos, ya_pedido = self._candidatos_minmax(sucursal)
             if tope:
                 candidatos = candidatos[:tope]
             if not candidatos:
@@ -152,20 +216,8 @@ class ReabastPedido(models.Model):
             # sirve: en Lupatini todos los productos están en «Todos» (medido 23/09, O17 y O19).
             candidatos.sort(key=lambda c: (c[1].product_id.default_code or '',
                                            c[1].product_id.name or ''))
-            lineas = []
-            for seq, (_urg, op) in enumerate(candidatos, 1):
-                en_camino = max(op.qty_forecast - op.qty_on_hand, 0.0) + ya_pedido[op.product_id]
-                lineas.append((0, 0, {
-                    'sequence': seq,
-                    'product_id': op.product_id.id,
-                    'orderpoint_id': op.id,
-                    'stock_sistema': op.qty_on_hand,
-                    'en_camino': en_camino,
-                    'min_qty': op.product_min_qty,
-                    'max_qty': op.product_max_qty,
-                    # propuesta inicial con el stock del sistema; se recalcula al contar
-                    'product_uom_qty': max(op.product_max_qty - op.qty_on_hand - en_camino, 0.0),
-                }))
+            lineas = [self._linea_desde_regla(op, ya_pedido, seq)
+                      for seq, (_urg, op) in enumerate(candidatos, 1)]
             nuevos |= self.create({
                 'sucursal_id': sucursal.id, 'origen': 'minmax',
                 'company_id': sucursal.company_id.id, 'line_ids': lineas,
