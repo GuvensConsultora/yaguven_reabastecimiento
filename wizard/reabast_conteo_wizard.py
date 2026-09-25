@@ -6,6 +6,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
 from odoo.tools.misc import html_escape
+from ..uom_util import _uom_rounding
 
 
 class ReabastConteoWizard(models.TransientModel):
@@ -80,7 +81,7 @@ class ReabastConteoWizard(models.TransientModel):
         ajustes = []   # (producto, sistema, contado, diferencia) para la traza
         for ln in self.line_ids:
             prod = ln.producto_id
-            rounding = prod.uom_id.rounding or 0.01
+            rounding = _uom_rounding(self.env) or 0.01
             # relee el on-hand VIVO: idempotencia (si ya coincide con lo contado, no re-ajusta -> no
             # duplica el asiento de diferencia de inventario) (B.7 / B.14)
             sistema_vivo = self._onhand_central(picking, prod)
@@ -122,7 +123,7 @@ class ReabastConteoWizard(models.TransientModel):
         hay_faltante = False
         for prod, ped in self._pedido_por_producto(picking).items():
             disp = self._onhand_central(picking, prod)
-            rounding = prod.uom_id.rounding or 0.01
+            rounding = _uom_rounding(self.env) or 0.01
             if float_compare(disp, ped, precision_rounding=rounding) < 0:
                 hay_faltante = True
                 break

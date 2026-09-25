@@ -4,6 +4,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare, float_is_zero
 from odoo.tools.misc import html_escape
+from ..uom_util import _uom_rounding
 
 
 class ReabastDiferenciaWizard(models.TransientModel):
@@ -71,7 +72,7 @@ class ReabastDiferenciaWizard(models.TransientModel):
             if not mv:
                 continue
             prod = ln.producto_id
-            rounding = prod.uom_id.rounding or 1.0
+            rounding = _uom_rounding(self.env) or 1.0
             if float_compare(ln.cant_recibida, 0.0, precision_rounding=rounding) < 0:
                 raise UserError(_("La cantidad recibida no puede ser negativa (%s).") % prod.display_name)
             mv.with_company(company).write({'quantity': ln.cant_recibida, 'picked': True})
@@ -100,7 +101,7 @@ class ReabastDiferenciaWizard(models.TransientModel):
         #    efecto sobre el stock (entra a la sucursal / devolución) lo decide Central en 5b.
         for ex in self.extra_ids:
             prod = ex.producto_id
-            rounding = prod.uom_id.rounding or 1.0
+            rounding = _uom_rounding(self.env) or 1.0
             if float_compare(ex.cant_recibida, 0.0, precision_rounding=rounding) <= 0:
                 raise UserError(_("Cargá una cantidad recibida mayor a cero en el extra %s.") % prod.display_name)
             dif_lines.append((0, 0, {
@@ -121,7 +122,7 @@ class ReabastDiferenciaWizard(models.TransientModel):
         #    que la cancelación llega prolija. yaguven_diferencia_wizard es el flag de contexto
         #    que el bloqueo de Ejercicio 2 (stock_picking.action_cancel) reconoce para dejarla
         #    pasar solo cuando viene de acá, no de un cancel manual.
-        precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        precision = self.env['decimal.precision'].precision_get('Product Unit')
         total_recibido = sum(ln.cant_recibida for ln in self.line_ids)
         if float_is_zero(total_recibido, precision_digits=precision):
             picking.with_company(company).with_context(yaguven_diferencia_wizard=True).action_cancel()
@@ -193,7 +194,7 @@ class ReabastDiferenciaWizard(models.TransientModel):
         """falto = cant_esperada - cant_recibida. Positivo: quedó de más en Tránsito (faltante en
         sucursal) -> vuelve a Central. Negativo: Tránsito quedó corto (sobrante en sucursal) ->
         se cubre desde Central. Devuelve (producto, cantidad, origen, destino) o None."""
-        rounding = producto.uom_id.rounding or 1.0
+        rounding = _uom_rounding(self.env) or 1.0
         if float_is_zero(falto, precision_rounding=rounding):
             return None
         transito = mv.location_id

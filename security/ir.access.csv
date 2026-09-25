@@ -1,0 +1,22 @@
+id,name,model_id,group_id/id,operation,domain
+access_reabast_pedido_recep,reabast.pedido.recepcionista,yaguven.reabast.pedido,group_reabast_recepcionista,cru,"['|', ('operating_unit_id', '=', False), ('operating_unit_id', 'in', user.operating_unit_ids.ids)]"
+access_reabast_pedido_super,reabast.pedido.supervisor,yaguven.reabast.pedido,group_reabast_supervisor,crud,"['|', ('operating_unit_id', '=', False), ('operating_unit_id', 'in', user.operating_unit_ids.ids)]"
+access_reabast_pedido_line_recep,reabast.pedido.line.recepcionista,yaguven.reabast.pedido.line,group_reabast_recepcionista,crud,
+access_reabast_pedido_line_super,reabast.pedido.line.supervisor,yaguven.reabast.pedido.line,group_reabast_supervisor,crud,
+access_reabast_armar_wizard_super,reabast.armar.wizard.supervisor,yaguven.reabast.armar.wizard,group_reabast_supervisor,crud,
+access_reabast_faltante_wizard_super,reabast.faltante.wizard.supervisor,yaguven.reabast.faltante.wizard,group_reabast_supervisor,crud,
+access_reabast_faltante_line_super,reabast.faltante.line.supervisor,yaguven.reabast.faltante.wizard.line,group_reabast_supervisor,crud,
+access_reabast_diferencia_recep,reabast.diferencia.recepcionista,yaguven.reabast.diferencia,group_reabast_recepcionista,cru,
+access_reabast_diferencia_super,reabast.diferencia.supervisor,yaguven.reabast.diferencia,group_reabast_supervisor,crud,
+access_reabast_diferencia_linea_recep,reabast.diferencia.linea.recepcionista,yaguven.reabast.diferencia.linea,group_reabast_recepcionista,crud,
+access_reabast_diferencia_linea_super,reabast.diferencia.linea.supervisor,yaguven.reabast.diferencia.linea,group_reabast_supervisor,crud,
+access_reabast_diferencia_wizard_recep,reabast.diferencia.wizard.recepcionista,yaguven.reabast.diferencia.wizard,group_reabast_recepcionista,crud,
+access_reabast_diferencia_wizard_super,reabast.diferencia.wizard.supervisor,yaguven.reabast.diferencia.wizard,group_reabast_supervisor,crud,
+access_reabast_diferencia_wizard_line_recep,reabast.diferencia.wizard.line.recepcionista,yaguven.reabast.diferencia.wizard.line,group_reabast_recepcionista,crud,
+access_reabast_diferencia_wizard_line_super,reabast.diferencia.wizard.line.supervisor,yaguven.reabast.diferencia.wizard.line,group_reabast_supervisor,crud,
+access_reabast_diferencia_wizard_extra_recep,reabast.diferencia.wizard.extra.recepcionista,yaguven.reabast.diferencia.wizard.extra,group_reabast_recepcionista,crud,
+access_reabast_diferencia_wizard_extra_super,reabast.diferencia.wizard.extra.supervisor,yaguven.reabast.diferencia.wizard.extra,group_reabast_supervisor,crud,
+access_reabast_conteo_wizard_super,reabast.conteo.wizard.supervisor,yaguven.reabast.conteo.wizard,group_reabast_supervisor,crud,
+access_reabast_conteo_wizard_line_super,reabast.conteo.wizard.line.supervisor,yaguven.reabast.conteo.wizard.line,group_reabast_supervisor,crud,
+access_reabast_minmax_wizard_recep,reabast.minmax.wizard.recepcionista,yaguven.reabast.minmax.wizard,group_reabast_recepcionista,crud,
+access_reabast_minmax_wizard_super,reabast.minmax.wizard.supervisor,yaguven.reabast.minmax.wizard,group_reabast_supervisor,crud,

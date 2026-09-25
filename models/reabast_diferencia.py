@@ -3,6 +3,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
 from odoo.tools.misc import html_escape
+from ..uom_util import _uom_rounding
 
 
 class ReabastDiferencia(models.Model):
@@ -117,7 +118,7 @@ class ReabastDiferencia(models.Model):
         circuito normal (pedido → armar → despacho → recepción)."""
         producto = linea.producto_esperado_id
         falta = linea.cant_esperada - linea.cant_recibida
-        if not producto or float_compare(falta, 0.0, precision_rounding=producto.uom_id.rounding) <= 0:
+        if not producto or float_compare(falta, 0.0, precision_rounding=_uom_rounding(self.env)) <= 0:
             raise UserError(_(
                 "La línea «%s» no tiene un faltante para autorizar (recibido ≥ esperado).",
                 (producto or linea.producto_recibido_id).display_name))
@@ -145,7 +146,7 @@ class ReabastDiferencia(models.Model):
         picking = self._generar_devolucion(producto_mal, cant_mal)
         correcto = linea.producto_esperado_id
         if not correcto or float_compare(linea.cant_esperada, 0.0,
-                                         precision_rounding=(correcto.uom_id.rounding if correcto else 0.01)) <= 0:
+                                         precision_rounding=(_uom_rounding(self.env) if correcto else 0.01)) <= 0:
             raise UserError(_(
                 "El reemplazo necesita un producto esperado con cantidad para reenviar (línea de %s).",
                 producto_mal.display_name))
@@ -171,7 +172,7 @@ class ReabastDiferencia(models.Model):
             producto = linea.producto_recibido_id or linea.producto_esperado_id
             cant = linea.cant_recibida - linea.cant_esperada
         if not producto or float_compare(
-                cant, 0.0, precision_rounding=producto.uom_id.rounding) <= 0:
+                cant, 0.0, precision_rounding=_uom_rounding(self.env)) <= 0:
             raise UserError(_(
                 "La línea «%s» no tiene un excedente para devolver.",
                 (producto or linea.producto_esperado_id).display_name))

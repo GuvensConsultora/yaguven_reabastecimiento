@@ -12,7 +12,6 @@
         <field name="model">stock.picking</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">yaguven_reabastecimiento.report_hoja_recoleccion</field>
-        <field name="report_file">yaguven_reabastecimiento.report_hoja_recoleccion</field>
         <field name="print_report_name">'Hoja recolección - %s' % (object.name)</field>
     </record>
 

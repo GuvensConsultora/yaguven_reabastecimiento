@@ -1,4 +1,5 @@
 from odoo import models
+from odoo.fields import Domain
 
 
 class StockMove(models.Model):
@@ -15,4 +16,5 @@ class StockMove(models.Model):
         en recolecciones del reabastecimiento.
         """
         domain = super()._search_picking_for_assignation_domain()
-        return domain + [('yaguven_en_recoleccion', '=', False)]
+        # En 20 el nativo devuelve un Domain; sumarle una lista está por deprecarse.
+        return Domain(domain) & Domain('yaguven_en_recoleccion', '=', False)

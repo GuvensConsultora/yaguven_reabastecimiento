@@ -6,6 +6,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare, float_round
 from odoo.tools.misc import html_escape
+from ..uom_util import _uom_rounding
 
 
 class ReabastFaltanteWizard(models.TransientModel):
@@ -45,7 +46,7 @@ class ReabastFaltanteWizard(models.TransientModel):
             por_prod[ln.producto_id].append(ln)
         for prod, lns in por_prod.items():
             disp = lns[0].disponible
-            rounding = prod.uom_id.rounding or 1.0
+            rounding = _uom_rounding(self.env) or 1.0
             items = [{'key': ln, 'pedido': ln.pedido_qty, 'orden': ln.sucursal_id.id or 0} for ln in lns]
             asign = self._calc_reparto(self.estrategia, disp, items, rounding)
             for ln in lns:
@@ -92,7 +93,7 @@ class ReabastFaltanteWizard(models.TransientModel):
         vals = []
         for prod, dmoves in por_prod.items():
             disp = self._disponible(picking, prod)
-            rounding = prod.uom_id.rounding or 1.0
+            rounding = _uom_rounding(self.env) or 1.0
             items = [{'key': d.id, 'pedido': d.product_uom_qty,
                       'orden': (self._warehouse_de_transito(d.location_dest_id).id or 0)} for d in dmoves]
             asign = self._calc_reparto(estrategia, disp, items, rounding)
@@ -195,7 +196,7 @@ class ReabastFaltanteWizard(models.TransientModel):
         falt_por_suc = defaultdict(list)   # sucursal -> [(producto, faltante)]
         asign_por_prod = defaultdict(float)
         for ln in self.line_ids.filtered(lambda l: l.producto_id and l.sucursal_id):
-            rounding = ln.producto_id.uom_id.rounding or 1.0
+            rounding = _uom_rounding(self.env) or 1.0
             asign = ln.asignado_qty
             if float_compare(asign, 0.0, precision_rounding=rounding) < 0:
                 raise UserError(_("La cantidad asignada no puede ser negativa (%s).") % ln.producto_id.display_name)

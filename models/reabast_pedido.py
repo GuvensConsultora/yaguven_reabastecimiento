@@ -100,9 +100,8 @@ class ReabastPedido(models.Model):
     def _tope_minmax(self):
         """Cuántos productos entran como máximo en un pedido de mín/máx: lo que una persona de
         sucursal puede contar de una vez. Configurable (Inventario › Configuración), no fijo acá."""
-        valor = self.env['ir.config_parameter'].sudo().get_param(
-            'yaguven_reabastecimiento.tope_minmax')
-        return int(valor) if valor and str(valor).isdigit() and int(valor) > 0 else 0
+        valor = self.env['ir.config_parameter'].sudo().get_int('yaguven_reabastecimiento.tope_minmax', 0)
+        return valor if valor > 0 else 0
 
     @api.model
     def _candidatos_minmax(self, sucursal):

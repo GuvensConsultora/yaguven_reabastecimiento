@@ -40,11 +40,8 @@ class StockWarehouseOrderpoint(models.Model):
     # ------------------------------------------------------------------
     @api.model
     def _yaguven_param(self, clave, defecto):
-        valor = self.env['ir.config_parameter'].sudo().get_param(PARAM % clave)
-        try:
-            return float(valor) if valor not in (None, False, '') else defecto
-        except ValueError:
-            return defecto
+        # Odoo 20: get_param no existe; get_float devuelve el default si falta o no es número.
+        return self.env['ir.config_parameter'].sudo().get_float(PARAM % clave, defecto)
 
     @api.model
     def _yaguven_regla(self, vendido, dias_ventana, dias_llegada):
@@ -114,13 +111,13 @@ class StockWarehouseOrderpoint(models.Model):
         desde = fields.Datetime.now() - timedelta(days=dias)
         Move = self.env['stock.move']
         ventas = defaultdict(float)
-        for (loc, prod), qty in Move._read_group(
+        for loc, prod, qty in Move._read_group(
                 [('state', '=', 'done'), ('date', '>=', desde),
                  ('location_id.usage', '=', 'internal'), ('location_dest_id.usage', '=', 'customer')],
                 ['location_id', 'product_id'], ['product_qty:sum']):
             if loc.warehouse_id:
                 ventas[(loc.warehouse_id.id, prod.id)] += qty
-        for (loc, prod), qty in Move._read_group(
+        for loc, prod, qty in Move._read_group(
                 [('state', '=', 'done'), ('date', '>=', desde),
                  ('location_id.usage', '=', 'customer'), ('location_dest_id.usage', '=', 'internal')],
                 ['location_dest_id', 'product_id'], ['product_qty:sum']):
