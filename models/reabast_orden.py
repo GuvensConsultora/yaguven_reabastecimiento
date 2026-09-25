@@ -61,6 +61,11 @@ class StockWarehouseOrderpoint(models.Model):
                 op.qty_to_order = op._get_multiple_rounded_qty(op.product_max_qty - op.qty_forecast)
         pedidos = reab._yaguven_agregar_a_pedido()
         reab.action_remove_manual_qty_to_order()
+        # qty_to_order_computed es ALMACENADO y no depende de nuestros pedidos: Odoo sólo lo recalcula
+        # al abrir Reabastecimiento (_get_orderpoint_action). Sin esto, un segundo «Ordenar» sobre
+        # la misma fila duplicaba la cantidad (probado en staging 25/09).
+        reab.invalidate_recordset(['qty_forecast', 'qty_on_hand'])
+        reab._compute_qty_to_order_computed()
         reab._compute_qty_to_order()
         if not pedidos:
             raise UserError(_("No hay nada para pedir: la cantidad a ordenar es 0."))
