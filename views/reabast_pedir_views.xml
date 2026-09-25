@@ -72,5 +72,7 @@
               parent="menu_reabast_root"
               action="action_reabast_pedir"
               sequence="3"
+              active="False"
               groups="group_reabast_recepcionista,group_reabast_supervisor"/>
+    <!-- 25/09: apagado a pedido de Anael (la sucursal no cuenta). Se repone con «Ordenar». -->
 </odoo>

@@ -1,6 +1,6 @@
 {
     'name': 'Yagüven - Reabastecimiento Central/Sucursales',
-    'version': '19.0.1.20.0',
+    'version': '19.0.1.21.0',
     'summary': 'Circuito de reabastecimiento con gateo de pasos (recolección → despacho → recepción)',
     'description': """
 Capa operativa del circuito de reabastecimiento Central → Sucursales (y sucursal → sucursal).
@@ -62,7 +62,7 @@ por sucursal con el faltante no despachado.
         'views/reabast_armar_views.xml',
         'views/reabast_diferencia_wizard_views.xml',
         'views/reabast_diferencia_views.xml',
-        'views/res_config_settings_views.xml',
+        # 'views/res_config_settings_views.xml',   # 25/09: fuera (conteo y sugeridos apagados)
     ],
     'license': 'LGPL-3',
     'installable': True,

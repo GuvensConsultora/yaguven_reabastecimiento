@@ -30,11 +30,12 @@ class ReabastPedido(models.Model):
         string='Estado', default='borrador', required=True, tracking=True,
         help='Borrador (editable) → Enviado (lo toma "Armar recolección") → Procesado / Cancelado.')
     line_ids = fields.One2many('yaguven.reabast.pedido.line', 'pedido_id', string='Líneas')
-    # de dónde salió el pedido: cargado a mano; generado desde las reglas de mín/máx para que la
-    # sucursal cuente (botón «Pedir mercadería»); o armado solo por el proceso diario, en borrador
-    # para que Central lo revise (acordado con Anael 23/09: la sucursal no cuenta ni maneja mín/máx).
+    # de dónde salió el pedido: cargado a mano; con «Ordenar» en Reabastecimiento (el circuito
+    # vigente, pedido de Anael 25/09, ver reabast_orden.py); o los dos caminos APAGADOS el 25/09 a
+    # pedido de Anael: el conteo en sucursal («Pedir mercadería») y el automático diario.
     origen = fields.Selection(
-        [('manual', 'Manual'), ('minmax', 'Mín/máx'), ('auto', 'Automático')],
+        [('manual', 'Manual'), ('orden', 'Desde Reabastecimiento'),
+         ('minmax', 'Mín/máx'), ('auto', 'Automático')],
         string='Origen', default='manual', required=True, readonly=True, copy=False,
         tracking=True)
     faltan_contar = fields.Integer(
@@ -108,6 +109,10 @@ class ReabastPedido(models.Model):
     def _candidatos_minmax(self, sucursal):
         """Lo que le falta a una sucursal según sus reglas que se surten desde Central, más
         urgente primero. Lo usan los dos caminos: el pedido para contar y el automático.
+
+        OJO (25/09): los dos caminos quedaron apagados. Desde reabast_orden.py, lo ya pedido cuenta
+        como «en camino» en qty_to_order; si se reactivan, el descuento de `ya_pedido` de acá lo
+        restaría DOS veces.
 
         - Solo reglas cuya ruta surte desde Existencias de Central (las de «Comprar» quedan afuera).
         - Se descuenta lo que la sucursal ya tiene en pedidos en borrador/enviados (Odoo no los
