@@ -7,23 +7,23 @@
         <field name="inherit_id" ref="stock.view_warehouse"/>
         <field name="arch" type="xml">
             <field name="code" position="after">
-                <field name="yaguven_dias_entre_llegadas"/>
+                <field name="yaguven_dias_entre_llegadas" invisible="1"/>
             </field>
         </field>
     </record>
 
-    <!-- Reabastecimiento: sugeridos al lado del mín/máx real, para comparar antes de aplicar -->
+    <!-- Sugeridos: OCULTOS desde el 25/09 (Anael no quiere nada automático). El cálculo queda. -->
     <record id="view_orderpoint_tree_yaguven_sugerido" model="ir.ui.view">
         <field name="name">stock.warehouse.orderpoint.list.yaguven.sugerido</field>
         <field name="model">stock.warehouse.orderpoint</field>
         <field name="inherit_id" ref="stock.view_warehouse_orderpoint_tree_editable"/>
         <field name="arch" type="xml">
             <field name="product_max_qty" position="after">
-                <field name="yaguven_venta_ventana" string="Vendido" optional="show" width="60"/>
-                <field name="yaguven_min_sugerido" string="Mín sug." optional="show" width="60"/>
-                <field name="yaguven_max_sugerido" string="Máx sug." optional="show" width="60"/>
-                <field name="yaguven_sugerido_fecha" optional="hide"/>
-                <field name="yaguven_sugerido_fuente" optional="hide"/>
+                <field name="yaguven_venta_ventana" column_invisible="1"/>
+                <field name="yaguven_min_sugerido" column_invisible="1"/>
+                <field name="yaguven_max_sugerido" column_invisible="1"/>
+                <field name="yaguven_sugerido_fecha" column_invisible="1"/>
+                <field name="yaguven_sugerido_fuente" column_invisible="1"/>
             </field>
         </field>
     </record>
@@ -32,8 +32,8 @@
     <record id="action_orderpoint_aplicar_sugerido" model="ir.actions.server">
         <field name="name">Aplicar mín/máx sugerido</field>
         <field name="model_id" ref="stock.model_stock_warehouse_orderpoint"/>
-        <field name="binding_model_id" ref="stock.model_stock_warehouse_orderpoint"/>
-        <field name="binding_view_types">list</field>
+        <!-- 25/09: fuera del menú Acciones, a pedido de Anael (nada automático). -->
+        <field name="binding_model_id" eval="False"/>
         <field name="group_ids" eval="[(4, ref('yaguven_reabastecimiento.group_reabast_supervisor'))]"/>
         <field name="state">code</field>
         <field name="code">action = records.action_yaguven_aplicar_sugerido()</field>

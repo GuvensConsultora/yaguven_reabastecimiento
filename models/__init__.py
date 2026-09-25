@@ -5,3 +5,4 @@ from . import reabast_pedido
 from . import reabast_diferencia
 from . import res_config_settings
 from . import reabast_minmax
+from . import reabast_orden

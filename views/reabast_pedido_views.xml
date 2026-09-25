@@ -12,8 +12,7 @@
                 <filter name="f_enviado" string="Enviados" domain="[('state', '=', 'enviado')]"/>
                 <separator/>
                 <filter name="f_minmax" string="Mín/máx" domain="[('origen', '=', 'minmax')]"/>
-                <filter name="f_auto" string="Automáticos" domain="[('origen', '=', 'auto')]"/>
-                <filter name="f_auto_revisar" string="Automáticos para revisar" domain="[('origen', '=', 'auto'), ('state', '=', 'borrador')]"/>
+                <filter name="f_orden" string="Desde Reabastecimiento" domain="[('origen', '=', 'orden')]"/>
                 <filter name="f_sin_contar" string="Sin terminar de contar" domain="[('origen', '=', 'minmax'), ('state', '=', 'borrador')]"/>
                 <!-- O19: el group de "Agrupar por" va plano, sin expand= ni string= (ver knowledge §7b) -->
                 <group name="group_by">
@@ -90,13 +89,13 @@
                                    column_invisible="parent.origen != 'minmax'"
                                    invisible="not contado" readonly="1"/>
                             <field name="stock_sistema" string="Sistema" width="75px"
-                                   column_invisible="parent.origen not in ('minmax', 'auto')"/>
+                                   column_invisible="parent.origen not in ('minmax', 'auto', 'orden')"/>
                             <field name="diferencia" string="Dif." width="60px"
                                    column_invisible="parent.origen != 'minmax'"
                                    invisible="not contado or diferencia == 0"/>
-                            <field name="en_camino" string="Viene" width="65px" column_invisible="parent.origen not in ('minmax', 'auto')"/>
-                            <field name="min_qty" width="55px" column_invisible="parent.origen not in ('minmax', 'auto')"/>
-                            <field name="max_qty" width="55px" column_invisible="parent.origen not in ('minmax', 'auto')"/>
+                            <field name="en_camino" string="Viene" width="65px" column_invisible="parent.origen not in ('minmax', 'auto', 'orden')"/>
+                            <field name="min_qty" width="55px" column_invisible="parent.origen not in ('minmax', 'auto', 'orden')"/>
+                            <field name="max_qty" width="55px" column_invisible="parent.origen not in ('minmax', 'auto', 'orden')"/>
                             <field name="product_uom_qty" string="Se pide" width="75px"/>
                             <field name="stock_central" string="Central" width="70px"/>
                             <field name="aviso_central" string="Aviso" width="230px" decoration-warning="aviso_central"/>
