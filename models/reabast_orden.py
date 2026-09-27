@@ -49,16 +49,16 @@ class StockWarehouseOrderpoint(models.Model):
             res[op.id] = res.get(op.id, 0.0) + pedido[(op.warehouse_id.id, op.product_id.id)]
         return res
 
-    def action_replenish(self, force_to_max=False):
+    def action_replenish(self):
+        # 20: `action_replenish` no recibe `force_to_max`; la nativa fija la cantidad en lo cargado a
+        # mano o, si no hay, en «hasta el máximo» (stock_orderpoint.py:382). Se hace lo mismo acá.
         reab = self._yaguven_reab()
         otras = self - reab
-        res = super(StockWarehouseOrderpoint, otras).action_replenish(force_to_max=force_to_max) \
-            if otras else False
+        res = super(StockWarehouseOrderpoint, otras).action_replenish() if otras else False
         if not reab:
             return res
-        if force_to_max:
-            for op in reab:
-                op.qty_to_order = op._get_multiple_rounded_qty(op.product_max_qty - op.qty_forecast)
+        for op in reab:
+            op.qty_to_order = op.qty_to_order_manual or op.qty_to_order_to_max
         pedidos = reab._yaguven_agregar_a_pedido()
         reab.action_remove_manual_qty_to_order()
         # qty_to_order_computed es ALMACENADO y no depende de nuestros pedidos: Odoo sólo lo recalcula
