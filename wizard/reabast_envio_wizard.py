@@ -17,13 +17,16 @@ class ReabastEnvioWizard(models.TransientModel):
         'stock.warehouse', string='Sale de', required=True,
         default=lambda self: self._default_origen(),
         domain="[('id', 'in', origen_permitido_ids)]")
+    # «Va a» es el TRÁNSITO de la sucursal que recibe, no su almacén: los almacenes tienen regla
+    # por Unidad Operativa y una sucursal no puede leer el de otra (ni para mostrar su nombre). El
+    # tránsito («Tránsito → Moreno») lo leen todos y de él sale el tipo de Recepción del destino.
     destino_id = fields.Many2one(
-        'stock.warehouse', string='Va a', required=True,
-        domain="[('id', 'in', destino_permitido_ids), ('id', '!=', origen_id)]")
+        'stock.location', string='Va a', required=True,
+        domain="[('id', 'in', destino_permitido_ids)]")
     origen_permitido_ids = fields.Many2many(
         'stock.warehouse', compute='_compute_permitidos')
     destino_permitido_ids = fields.Many2many(
-        'stock.warehouse', compute='_compute_permitidos')
+        'stock.location', compute='_compute_permitidos')
     line_ids = fields.One2many(
         'yaguven.reabast.envio.wizard.line', 'wizard_id', string='Productos')
 
@@ -35,20 +38,28 @@ class ReabastEnvioWizard(models.TransientModel):
         if not self.env.user.has_group('yaguven_reabastecimiento.group_reabast_supervisor'):
             sucursales = sucursales.filtered(
                 lambda w: w.operating_unit_id in self.env.user.operating_unit_ids)
-        return sucursales
+        return sucursales.with_env(self.env)
 
     @api.model
     def _default_origen(self):
         origenes = self._origenes_del_usuario()
         return origenes[:1].id if len(origenes) == 1 else False
 
+    @api.model
+    def _recepciones_envio(self):
+        """Tipos de Recepción de las sucursales habilitadas (en sudo: sólo para ids)."""
+        return self.env['stock.picking.type'].sudo().search([
+            ('yaguven_reabast_paso', '=', 'recepcion'),
+            ('warehouse_id', 'in', self.env['stock.picking.type']._yg_sucursales_envio().ids)])
+
     @api.depends('origen_id')
     def _compute_permitidos(self):
-        todas = self.env['stock.picking.type']._yg_sucursales_envio()
+        recep = self._recepciones_envio()
         origenes = self._origenes_del_usuario()
         for wiz in self:
             wiz.origen_permitido_ids = origenes
-            wiz.destino_permitido_ids = todas - wiz.origen_id
+            wiz.destino_permitido_ids = recep.filtered(
+                lambda t: t.warehouse_id.id != wiz.origen_id.id).default_location_src_id.ids
 
     @api.model
     def action_abrir(self):
@@ -62,14 +73,12 @@ class ReabastEnvioWizard(models.TransientModel):
             'res_model': self._name, 'view_mode': 'form', 'target': 'new',
         }
 
-    def _tipo_recepcion(self, sucursal):
-        recep = self.env['stock.picking.type'].search([
-            ('yaguven_reabast_paso', '=', 'recepcion'),
-            ('warehouse_id', '=', sucursal.id)], limit=1)
-        if not recep or not recep.default_location_src_id:
-            raise UserError(_(
-                "La sucursal «%s» no tiene tipo de Recepción de reabastecimiento con su tránsito.")
-                % sucursal.display_name)
+    def _tipo_recepcion(self, transito):
+        recep = self._recepciones_envio().filtered(
+            lambda t: t.default_location_src_id == transito)[:1]
+        if not recep:
+            raise UserError(_("«%s» no es el tránsito de una sucursal habilitada para envíos.")
+                            % transito.display_name)
         return recep
 
     def action_enviar(self):
@@ -79,27 +88,29 @@ class ReabastEnvioWizard(models.TransientModel):
             raise UserError(_("Cargá al menos un producto con cantidad."))
         if self.origen_id not in self._origenes_del_usuario():
             raise UserError(_("No podés enviar desde «%s».") % self.origen_id.display_name)
-        if self.destino_id == self.origen_id:
+        recep_type = self._tipo_recepcion(self.destino_id)      # en sudo
+        destino = recep_type.warehouse_id
+        if destino.id == self.origen_id.id:
             raise UserError(_("La sucursal que recibe tiene que ser otra."))
 
         env_type = self.env['stock.picking.type']._yg_tipo_envio(self.origen_id)
-        recep_type = self._tipo_recepcion(self.destino_id)
         loc_origen = self.origen_id.lot_stock_id
-        transito = recep_type.default_location_src_id
+        transito = self.destino_id
         loc_destino = recep_type.default_location_dest_id
+        recep_type = recep_type.with_env(self.env)
 
         comp = self.origen_id.company_id
         Picking = self.env['stock.picking'].with_company(comp)
         Move = self.env['stock.move'].with_company(comp)
         origin = _('Envío %s → %s') % (self.origen_id.name.split('- ')[-1],
-                                       self.destino_id.name.split('- ')[-1])
+                                       destino.name.split('- ')[-1])
 
         # El partner va desde el alta: yaguven_remito_sucursal lo escribe al confirmar, y en 19 un
         # cambio de partner recalcula el destino del traslado desde el tipo (_compute_location_id),
         # que en el envío es la propia sucursal y no el tránsito de la que recibe.
         envio = Picking.create({
             'picking_type_id': env_type.id, 'company_id': comp.id,
-            'partner_id': self.destino_id.partner_id.id,
+            'partner_id': destino.partner_id.id,
             'location_id': loc_origen.id, 'location_dest_id': transito.id, 'origin': origin,
         })
         recepcion = Picking.create({
