@@ -8,11 +8,29 @@
         cada menú. No se toca ningún menú nativo (C.2).
     -->
 
+    <!-- Lista propia de Recolecciones, con la UO de cada sucursal que pidió. Prioridad alta para
+         que nunca sea la lista por defecto de stock.picking; la acción la pide por view_id. -->
+    <record id="view_reabast_recoleccion_list" model="ir.ui.view">
+        <field name="name">reabast.recoleccion.list</field>
+        <field name="model">stock.picking</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <list string="Recolecciones" create="false">
+                <field name="name" string="Recolección"/>
+                <field name="yaguven_reabast_uo_ids" widget="many2many_tags"/>
+                <field name="backorder_id" string="Parcial de" optional="show"/>
+                <field name="scheduled_date" string="Fecha programada"/>
+                <field name="state" string="Estado"/>
+            </list>
+        </field>
+    </record>
+
     <!-- ===== Acciones (reusan las vistas nativas de stock.picking) ===== -->
     <record id="action_reabast_recoleccion" model="ir.actions.act_window">
         <field name="name">Recolecciones</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_reabast_recoleccion_list"/>
         <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'recoleccion')]</field>
         <field name="context">{}</field>
         <field name="help" type="html">
