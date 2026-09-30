@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Envío entre sucursales: una sucursal le manda mercadería a otra en un solo paso (envío),
+        y la que recibe lo recepciona en su bandeja de Recepciones de siempre. Central no participa.
+        Lo usan las sucursales (grupo Recepcionista, que tienen todas; el Supervisor lo implica).
+    -->
+
+    <!-- ===== Asistente «Enviar a otra sucursal» ===== -->
+    <record id="view_reabast_envio_wizard_form" model="ir.ui.view">
+        <field name="name">reabast.envio.wizard.form</field>
+        <field name="model">yaguven.reabast.envio.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Enviar a otra sucursal">
+                <group>
+                    <group>
+                        <field name="origen_permitido_ids" invisible="1"/>
+                        <field name="destino_permitido_ids" invisible="1"/>
+                        <field name="origen_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="destino_id" options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                </group>
+                <field name="line_ids">
+                    <list editable="bottom">
+                        <field name="product_id" options="{'no_create': True}"/>
+                        <field name="disponible"/>
+                        <field name="product_uom_qty"/>
+                        <field name="product_uom_id" options="{'no_create': True}"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_enviar" string="Enviar" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_reabast_envio_wizard" model="ir.actions.server">
+        <field name="name">Enviar a otra sucursal</field>
+        <field name="model_id" ref="model_yaguven_reabast_envio_wizard"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_abrir()</field>
+    </record>
+
+    <!-- ===== Lista de envíos ===== -->
+    <!-- Prioridad alta para que nunca sea la lista por defecto de stock.picking (ver colgados). -->
+    <record id="view_reabast_envio_list" model="ir.ui.view">
+        <field name="name">reabast.envio.list</field>
+        <field name="model">stock.picking</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <list string="Envíos entre sucursales" create="false">
+                <field name="name" string="Envío"/>
+                <field name="picking_type_id" string="Sale de"/>
+                <field name="location_dest_id" string="Va a"/>
+                <field name="origin" optional="hide"/>
+                <field name="scheduled_date" string="Fecha"/>
+                <field name="state" string="Estado"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_reabast_envio" model="ir.actions.act_window">
+        <field name="name">Envíos entre sucursales</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_reabast_envio_list"/>
+        <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'envio')]</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay envíos entre sucursales</p>
+            <p>Para mandarle mercadería a otra sucursal, usá «Enviar a otra sucursal». Lo que te
+               manden a vos te aparece en Recepciones.</p>
+        </field>
+    </record>
+
+    <!-- ===== Menú (debajo de Recepciones) ===== -->
+    <menuitem id="menu_reabast_envio_nuevo"
+              name="Enviar a otra sucursal"
+              parent="menu_reabast_root"
+              action="action_reabast_envio_wizard"
+              sequence="40"
+              groups="group_reabast_recepcionista"/>
+
+    <menuitem id="menu_reabast_envio"
+              name="Envíos entre sucursales"
+              parent="menu_reabast_root"
+              action="action_reabast_envio"
+              sequence="45"
+              groups="group_reabast_recepcionista"/>
+</odoo>
