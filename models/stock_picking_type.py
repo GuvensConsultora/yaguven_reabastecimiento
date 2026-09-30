@@ -26,21 +26,26 @@ class StockPickingType(models.Model):
     # almacenes que tienen tipo de Recepción de reabastecimiento, menos Central (el almacén de la
     # Recolección), que sigue siempre por el circuito completo.
 
+    # Los almacenes tienen regla por Unidad Operativa (una sucursal sólo lee el suyo), así que la
+    # topología se lee con sudo: devuelve almacenes en sudo, para usar sus ids y no para mostrarlos.
+
     @api.model
     def _yg_sucursales_envio(self):
-        recep = self.search([('yaguven_reabast_paso', '=', 'recepcion')])
-        central = self.search([('yaguven_reabast_paso', '=', 'recoleccion')]).warehouse_id
+        tipos = self.sudo()
+        recep = tipos.search([('yaguven_reabast_paso', '=', 'recepcion')])
+        central = tipos.search([('yaguven_reabast_paso', '=', 'recoleccion')]).warehouse_id
         return (recep.warehouse_id - central).sorted('name')
 
     @api.model
     def _yg_tipo_envio(self, sucursal):
         """Tipo «REAB Envío desde <sucursal>»: lo busca y, si no existe, lo crea. Sale de las
         existencias de la sucursal; el destino (el tránsito de la que recibe) lo fija cada envío."""
+        sucursal = sucursal.sudo()
         tipo = self.search([('yaguven_reabast_paso', '=', 'envio'),
                             ('warehouse_id', '=', sucursal.id)], limit=1)
         if tipo:
             return tipo
-        if sucursal not in self._yg_sucursales_envio():
+        if sucursal.id not in self._yg_sucursales_envio().ids:
             raise UserError(_("«%s» no está habilitada para envíos entre sucursales.")
                             % sucursal.display_name)
         code = re.sub(r'[^A-Z0-9]', '', (sucursal.code or '').upper())[:5]
