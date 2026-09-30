@@ -208,8 +208,12 @@ class StockPicking(models.Model):
             origen = picking.move_ids.move_orig_ids.picking_id.filtered(lambda p: p.id != picking.id)
             pendientes = origen.filtered(lambda p: p.state not in ('done', 'cancel'))
             if pendientes:
-                anterior = {'despacho': 'la recolección',
-                            'recepcion': 'el despacho'}.get(paso, 'el paso anterior')
+                # el paso anterior se nombra por lo que ES (una recepción puede venir de un
+                # despacho de Central o de un envío entre sucursales), no por el paso actual
+                anterior = {'recoleccion': 'la recolección',
+                            'despacho': 'el despacho',
+                            'envio': 'el envío'}.get(
+                    pendientes[0].picking_type_id.yaguven_reabast_paso, 'el paso anterior')
                 etiqueta = {'recoleccion': 'la recolección',
                             'despacho': 'el despacho',
                             'recepcion': 'la recepción'}.get(paso, 'este paso')

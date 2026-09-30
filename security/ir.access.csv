@@ -20,3 +20,5 @@ access_reabast_conteo_wizard_super,reabast.conteo.wizard.supervisor,yaguven.reab
 access_reabast_conteo_wizard_line_super,reabast.conteo.wizard.line.supervisor,yaguven.reabast.conteo.wizard.line,group_reabast_supervisor,crud,
 access_reabast_minmax_wizard_recep,reabast.minmax.wizard.recepcionista,yaguven.reabast.minmax.wizard,group_reabast_recepcionista,crud,
 access_reabast_minmax_wizard_super,reabast.minmax.wizard.supervisor,yaguven.reabast.minmax.wizard,group_reabast_supervisor,crud,
+access_reabast_envio_wizard_recep,reabast.envio.wizard.recepcionista,yaguven.reabast.envio.wizard,group_reabast_recepcionista,crud,
+access_reabast_envio_line_recep,reabast.envio.line.recepcionista,yaguven.reabast.envio.wizard.line,group_reabast_recepcionista,crud,
