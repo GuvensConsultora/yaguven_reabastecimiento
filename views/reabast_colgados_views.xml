@@ -9,10 +9,13 @@
         los que llevan 1+ día. No toca ninguna vista ni menú nativo (C.2); reusa stock.picking.
     -->
 
-    <!-- Vista lista dedicada: resalta por antigüedad (rojo 1+ día, ámbar del día) -->
+    <!-- Vista lista dedicada: resalta por antigüedad (rojo 1+ día, ámbar del día). Prioridad 99:
+         con la 16 por defecto empataba con stock.vpicktree y ganaba por nombre, así que era la lista
+         de TODAS las acciones de stock.picking sin vista fija (Transferencias, Recepciones, etc.). -->
     <record id="view_reabast_colgados_list" model="ir.ui.view">
         <field name="name">reabast.despachos.colgados.list</field>
         <field name="model">stock.picking</field>
+        <field name="priority">99</field>
         <field name="arch" type="xml">
             <list string="Despachos colgados" create="false"
                   decoration-danger="yaguven_dias_parado &gt;= 1"
