@@ -29,12 +29,13 @@ class ReabastEnvioWizard(models.TransientModel):
     destino_id = fields.Many2one(
         'stock.location', string='Va a',
         domain="[('id', 'in', destino_permitido_ids)]")
-    # Modo pedir: a quién se le pide, por sus EXISTENCIAS (mismo motivo: el almacén no se puede leer)
+    # Modo pedir: a quién se le pide, por su UNIDAD OPERATIVA («Padua»): el almacén no se puede
+    # leer y sus existencias («A-Pad/Existencias») no se entienden ni se encuentran buscando «Padua».
     pide_a_id = fields.Many2one(
-        'stock.location', string='Le pide a',
+        'operating.unit', string='Le pide a',
         domain="[('id', 'in', pide_a_permitido_ids)]")
     pide_a_permitido_ids = fields.Many2many(
-        'stock.location', compute='_compute_permitidos')
+        'operating.unit', compute='_compute_permitidos')
     origen_permitido_ids = fields.Many2many(
         'stock.warehouse', compute='_compute_permitidos')
     destino_permitido_ids = fields.Many2many(
@@ -72,12 +73,20 @@ class ReabastEnvioWizard(models.TransientModel):
             otras = recep.filtered(lambda t: t.warehouse_id.id != wiz.origen_id.id)
             wiz.origen_permitido_ids = origenes
             wiz.destino_permitido_ids = otras.default_location_src_id.ids
-            wiz.pide_a_permitido_ids = otras.warehouse_id.lot_stock_id.ids
+            wiz.pide_a_permitido_ids = otras.warehouse_id.operating_unit_id.ids
+
+    def _sale_de_pedido(self):
+        """Almacén (en sudo) de la Unidad Operativa a la que se le pide."""
+        self.ensure_one()
+        return self.env['stock.picking.type']._yg_sucursales_envio().filtered(
+            lambda w: w.operating_unit_id == self.pide_a_id)[:1]
 
     def _loc_disponible(self):
         """Dónde se mira el stock libre de cada línea: en la sucursal de la que sale."""
         self.ensure_one()
-        return self.pide_a_id if self.modo == 'pedir' else self.origen_id.lot_stock_id
+        if self.modo == 'pedir':
+            return self._sale_de_pedido().lot_stock_id.with_env(self.env)
+        return self.origen_id.lot_stock_id
 
     @api.model
     def action_abrir(self, modo='enviar'):
@@ -131,8 +140,7 @@ class ReabastEnvioWizard(models.TransientModel):
         lineas = self._lineas()
         if not self.pide_a_id:
             raise UserError(_("Elegí a qué sucursal le pedís."))
-        sale_de = self.env['stock.picking.type']._yg_sucursales_envio().filtered(
-            lambda w: w.lot_stock_id == self.pide_a_id)[:1]         # en sudo
+        sale_de = self._sale_de_pedido()                          # en sudo
         if not sale_de or sale_de.id == self.origen_id.id:
             raise UserError(_("Elegí otra sucursal para pedirle."))
         recep_type = self._recepciones_envio().filtered(
