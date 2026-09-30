@@ -16,6 +16,25 @@ class StockPicking(models.Model):
         related='picking_type_id.yaguven_reabast_paso', string='Paso de reabastecimiento',
         readonly=True)
 
+    # --- Unidades operativas de la recolección (pedido de Anael 29/09) ---
+    # Una recolección consolida pedidos de varias sucursales, así que la UO no es una sola: se
+    # toma de los pedidos vinculados. La recolección parcial (backorder) no tiene pedidos propios
+    # y hereda las de la original. Almacenado para poder filtrar y agrupar por UO en la lista.
+    yaguven_reabast_pedido_ids = fields.One2many(
+        'yaguven.reabast.pedido', 'picking_recoleccion_id', string='Pedidos de reabastecimiento')
+    yaguven_reabast_uo_ids = fields.Many2many(
+        'operating.unit', 'yaguven_reabast_picking_uo_rel', 'picking_id', 'operating_unit_id',
+        string='Unidades operativas', compute='_compute_yaguven_reabast_uo_ids', store=True,
+        help='Unidades operativas de las sucursales cuyos pedidos se preparan en esta recolección.')
+
+    @api.depends('yaguven_reabast_pedido_ids.operating_unit_id',
+                 'backorder_id.yaguven_reabast_uo_ids')
+    def _compute_yaguven_reabast_uo_ids(self):
+        for picking in self:
+            picking.yaguven_reabast_uo_ids = (
+                picking.yaguven_reabast_pedido_ids.operating_unit_id
+                or picking.backorder_id.yaguven_reabast_uo_ids)
+
     # --- Reporte de diferencias de recepción (sub-ladrillo 5) ---
     yaguven_diferencia_id = fields.Many2one(
         'yaguven.reabast.diferencia', string='Diferencias informadas', copy=False, readonly=True,
