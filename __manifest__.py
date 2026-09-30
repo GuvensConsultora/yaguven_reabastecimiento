@@ -1,6 +1,6 @@
 {
     'name': 'Yagüven - Reabastecimiento Central/Sucursales',
-    'version': '20.0.1.23.2',
+    'version': '20.0.1.24.1',
     'summary': 'Circuito de reabastecimiento con gateo de pasos (recolección → despacho → recepción)',
     'description': """
 Capa operativa del circuito de reabastecimiento Central → Sucursales (y sucursal → sucursal).
@@ -33,6 +33,7 @@ producto × sucursal (qué preparar en total y adónde va por sucursal), computa
 Envío entre sucursales (1.23.0): una sucursal le manda mercadería a otra en un solo paso
 («Enviar a otra sucursal» → envío a su tránsito) y la que recibe lo recepciona en su bandeja de
 Recepciones de siempre. Central no participa. Tipos «REAB Envío desde X» creados a demanda.
+«Pedir a otra sucursal» (1.24.0): la que necesita arma el envío y queda pendiente para la otra.
 
 Sub-ladrillo 4 (Política de faltante): wizard "Resolver reparto" en la recolección. Muestra pedido
 vs disponible por producto y un reparto sugerido editable (prorrateo / prioridad / partes iguales);

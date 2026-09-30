@@ -35,6 +35,27 @@ class StockPicking(models.Model):
                 picking.yaguven_reabast_pedido_ids.operating_unit_id
                 or picking.backorder_id.yaguven_reabast_uo_ids)
 
+    # --- Envío entre sucursales: «Sale de mi sucursal» (filtro de la lista, 1.24.0) ---
+    # El filtro corre en el navegador, donde no está `user.operating_unit_ids`: el campo resuelve
+    # en el servidor, con las Unidades Operativas del usuario que busca.
+    yaguven_sale_de_mi_uo = fields.Boolean(
+        string='Sale de mi sucursal', compute='_compute_yaguven_sale_de_mi_uo',
+        search='_search_yaguven_sale_de_mi_uo')
+
+    def _compute_yaguven_sale_de_mi_uo(self):
+        uos = self.env.user.operating_unit_ids
+        for picking in self:
+            picking.yaguven_sale_de_mi_uo = (
+                picking.picking_type_id.sudo().warehouse_id.operating_unit_id in uos)
+
+    def _search_yaguven_sale_de_mi_uo(self, operator, value):
+        if operator not in ('=', '!=') or not isinstance(value, bool):
+            raise UserError(_("Operación no soportada para «Sale de mi sucursal»."))
+        tipos = self.env['stock.picking.type'].sudo().search([
+            ('warehouse_id.operating_unit_id', 'in', self.env.user.operating_unit_ids.ids)])
+        dentro = (operator == '=') == value
+        return [('picking_type_id', 'in' if dentro else 'not in', tipos.ids)]
+
     # --- Reporte de diferencias de recepción (sub-ladrillo 5) ---
     yaguven_diferencia_id = fields.Many2one(
         'yaguven.reabast.diferencia', string='Diferencias informadas', copy=False, readonly=True,
@@ -204,6 +225,16 @@ class StockPicking(models.Model):
             paso = picking.picking_type_id.yaguven_reabast_paso
             if not paso:
                 continue
+            # El envío entre sucursales lo valida la que manda (o el Supervisor): con «Pedir a otra
+            # sucursal» lo arma la que recibe, y no puede darlo por salido ella misma. El almacén se
+            # lee en sudo porque tiene regla por Unidad Operativa.
+            if paso == 'envio' and not self.env.user.has_group(
+                    'yaguven_reabastecimiento.group_reabast_supervisor'):
+                uo = picking.picking_type_id.sudo().warehouse_id.operating_unit_id
+                if uo not in self.env.user.operating_unit_ids:
+                    raise UserError(_(
+                        "Este envío lo valida la sucursal que manda (%s), cuando la mercadería sale.")
+                        % uo.display_name)
             # pickings de origen = el/los paso(s) anterior(es) en la cadena make_to_order
             origen = picking.move_ids.move_orig_ids.picking_id.filtered(lambda p: p.id != picking.id)
             pendientes = origen.filtered(lambda p: p.state not in ('done', 'cancel'))

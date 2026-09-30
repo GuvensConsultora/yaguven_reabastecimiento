@@ -12,12 +12,24 @@
         <field name="model">yaguven.reabast.envio.wizard</field>
         <field name="arch" type="xml">
             <form string="Enviar a otra sucursal">
-                <group>
+                <field name="modo" invisible="1"/>
+                <field name="origen_permitido_ids" invisible="1"/>
+                <field name="destino_permitido_ids" invisible="1"/>
+                <field name="pide_a_permitido_ids" invisible="1"/>
+                <!-- mismo campo `origen_id` en los dos bloques: es la sucursal del usuario, con el
+                     rótulo que corresponde a cada modo -->
+                <group invisible="modo == 'pedir'">
                     <group>
-                        <field name="origen_permitido_ids" invisible="1"/>
-                        <field name="destino_permitido_ids" invisible="1"/>
                         <field name="origen_id" options="{'no_create': True, 'no_open': True}"/>
-                        <field name="destino_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="destino_id" options="{'no_create': True, 'no_open': True}"
+                               required="modo == 'enviar'"/>
+                    </group>
+                </group>
+                <group invisible="modo != 'pedir'">
+                    <group>
+                        <field name="origen_id" string="Para" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="pide_a_id" options="{'no_create': True, 'no_open': True}"
+                               required="modo == 'pedir'"/>
                     </group>
                 </group>
                 <field name="line_ids">
@@ -29,7 +41,10 @@
                     </list>
                 </field>
                 <footer>
-                    <button name="action_enviar" string="Enviar" type="object" class="btn-primary"/>
+                    <button name="action_enviar" string="Enviar" type="object" class="btn-primary"
+                            invisible="modo == 'pedir'"/>
+                    <button name="action_pedir" string="Pedir" type="object" class="btn-primary"
+                            invisible="modo != 'pedir'"/>
                     <button string="Cancelar" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
@@ -41,6 +56,13 @@
         <field name="model_id" ref="model_yaguven_reabast_envio_wizard"/>
         <field name="state">code</field>
         <field name="code">action = model.action_abrir()</field>
+    </record>
+
+    <record id="action_reabast_pedir_sucursal_wizard" model="ir.actions.server">
+        <field name="name">Pedir a otra sucursal</field>
+        <field name="model_id" ref="model_yaguven_reabast_envio_wizard"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_abrir('pedir')</field>
     </record>
 
     <!-- ===== Lista de envíos ===== -->
@@ -61,17 +83,34 @@
         </field>
     </record>
 
+    <!-- Búsqueda propia (primaria, no toca la nativa): «Sale de mi sucursal» = lo que le toca
+         validar a la sucursal del usuario, incluidos los pedidos que le hicieron otras. -->
+    <record id="view_reabast_envio_search" model="ir.ui.view">
+        <field name="name">reabast.envio.search</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+        <field name="mode">primary</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="sale_de_mi_sucursal" string="Sale de mi sucursal"
+                        domain="[('yaguven_sale_de_mi_uo', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
     <record id="action_reabast_envio" model="ir.actions.act_window">
         <field name="name">Envíos entre sucursales</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_reabast_envio_list"/>
+        <field name="search_view_id" ref="view_reabast_envio_search"/>
         <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'envio')]</field>
-        <field name="context">{}</field>
+        <field name="context">{'search_default_sale_de_mi_sucursal': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No hay envíos entre sucursales</p>
-            <p>Para mandarle mercadería a otra sucursal, usá «Enviar a otra sucursal». Lo que te
-               manden a vos te aparece en Recepciones.</p>
+            <p>Para mandarle mercadería a otra sucursal, usá «Enviar a otra sucursal»; para pedirle, «Pedir
+               a otra sucursal». Lo que te manden a vos te aparece en Recepciones.</p>
         </field>
     </record>
 
@@ -81,6 +120,13 @@
               parent="menu_reabast_root"
               action="action_reabast_envio_wizard"
               sequence="40"
+              groups="group_reabast_recepcionista"/>
+
+    <menuitem id="menu_reabast_pedir_sucursal"
+              name="Pedir a otra sucursal"
+              parent="menu_reabast_root"
+              action="action_reabast_pedir_sucursal_wizard"
+              sequence="42"
               groups="group_reabast_recepcionista"/>
 
     <menuitem id="menu_reabast_envio"
