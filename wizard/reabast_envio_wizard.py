@@ -94,8 +94,12 @@ class ReabastEnvioWizard(models.TransientModel):
         origin = _('Envío %s → %s') % (self.origen_id.name.split('- ')[-1],
                                        self.destino_id.name.split('- ')[-1])
 
+        # El partner va desde el alta: yaguven_remito_sucursal lo escribe al confirmar, y en 19 un
+        # cambio de partner recalcula el destino del traslado desde el tipo (_compute_location_id),
+        # que en el envío es la propia sucursal y no el tránsito de la que recibe.
         envio = Picking.create({
             'picking_type_id': env_type.id, 'company_id': comp.id,
+            'partner_id': self.destino_id.partner_id.id,
             'location_id': loc_origen.id, 'location_dest_id': transito.id, 'origin': origin,
         })
         recepcion = Picking.create({
@@ -118,6 +122,12 @@ class ReabastEnvioWizard(models.TransientModel):
                 'move_orig_ids': [(4, env_move.id)],
             })
         (envio | recepcion).action_confirm()
+        # si igual se recalculó (otro partner resuelto al confirmar), se vuelve al tránsito: el
+        # write del picking lo propaga a los movimientos. Sin esto el envío deja el stock en el
+        # tránsito pero su movimiento dice «Existencias» y la recepción pierde la cadena.
+        if envio.location_dest_id != transito:
+            envio.do_unreserve()
+            envio.location_dest_id = transito
         envio.action_assign()
 
         return {
