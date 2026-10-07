@@ -339,7 +339,7 @@ class StockPicking(models.Model):
             for prod, pedido, viaja in filas)
         body = Markup("<p><strong>%s</strong></p><p>No viaja a la sucursal:</p><ul>%s</ul>") % (
             motivo, Markup(items))
-        for doc in recep | pedidos:
+        for doc in [recep, *pedidos]:
             doc.message_post(body=body, message_type="comment", subtype_xmlid="mail.mt_note")
 
         uo = recep.picking_type_id.warehouse_id.operating_unit_id
