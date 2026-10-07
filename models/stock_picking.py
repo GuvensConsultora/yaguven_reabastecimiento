@@ -288,14 +288,20 @@ class StockPicking(models.Model):
         que la orden parcial nativa (O20 stock.move._split + _create_backorder_picking)."""
         Move = self.env['stock.move']
         for reco in self:
-            despachos = reco.move_ids.move_dest_ids.filtered(
+            # un producto del que no se recolectó nada pasa ENTERO a la recolección pendiente:
+            # sus despachos cuelgan de ella, no de la original
+            despachos = (reco.move_ids | reco.backorder_ids.move_ids).move_dest_ids.filtered(
                 lambda m: m.state not in ('done', 'cancel'))
             despachos._action_assign()
             nuevo_desp, nueva_recep = {}, {}   # picking original -> picking del segundo tramo
             for dmv in despachos:
                 pendientes = dmv.move_orig_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
                 falta = dmv.product_uom_qty - dmv.quantity
-                if not pendientes or dmv.uom_id.compare(falta, 0.0) <= 0:
+                if not pendientes:
+                    continue
+                if dmv.uom_id.compare(falta, 0.0) <= 0:
+                    # reservó todo: ya no espera nada de la recolección pendiente
+                    dmv.move_orig_ids = [(3, m.id) for m in pendientes]
                     continue
                 rmvs = dmv.move_dest_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
                 if dmv.uom_id.compare(dmv.quantity, 0.0) <= 0:
@@ -348,8 +354,9 @@ class StockPicking(models.Model):
         """Foto de los despachos abiertos ANTES de cerrar o dar de baja la recolección: si de un
         producto no se recolectó nada, Odoo cancela sus líneas de despacho y recepción solo, y sin
         esta foto la sucursal no se enteraría de lo que le falta. {move de despacho: demanda}."""
-        return {m.id: m.product_uom_qty for m in self.move_ids.move_dest_ids
-                if m.state not in ('done', 'cancel')}
+        return {reco.id: {m.id: m.product_uom_qty for m in reco.move_ids.move_dest_ids
+                          if m.state not in ('done', 'cancel')}
+                for reco in self}
 
     def _yaguven_ajustar_lo_que_no_viaja(self, motivo, abiertos):
         """Sobre recolecciones ya cerradas (o dadas de baja): ajusta despacho y recepción de cada
@@ -357,14 +364,16 @@ class StockPicking(models.Model):
         Pedido = self.env['yaguven.reabast.pedido']
         for reco in self:
             no_viaja = {}   # recepción (picking) -> [(producto, pedido, viaja)]
-            # las líneas canceladas siguen vinculadas a la recolección por move_dest_ids
-            todos = reco.move_ids.move_dest_ids
+            # Al cancelar, Odoo borra el vínculo recolección→despacho (O20 stock.move._action_cancel),
+            # así que se parte de la foto tomada antes y no de move_dest_ids.
+            foto = abiertos.get(reco.id, {})
+            todos = self.env['stock.move'].browse(list(foto)).exists() | reco.move_ids.move_dest_ids
             # las que Odoo ya canceló solo (no se recolectó nada): viaja 0
-            for dmv in todos.filtered(lambda m: m.id in abiertos and m.state == 'cancel'):
+            for dmv in todos.filtered(lambda m: m.id in foto and m.state == 'cancel'):
                 recep_moves = dmv.move_dest_ids.filtered(lambda m: m.state != 'done')
                 recep_moves.filtered(lambda m: m.state != 'cancel')._action_cancel()
                 for recep in recep_moves.picking_id:
-                    no_viaja.setdefault(recep, []).append((dmv.product_id, abiertos[dmv.id], 0.0))
+                    no_viaja.setdefault(recep, []).append((dmv.product_id, foto[dmv.id], 0.0))
             despachos = todos.filtered(lambda m: m.state not in ('done', 'cancel'))
             despachos._action_assign()
             for dmv in despachos:
