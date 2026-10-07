@@ -354,7 +354,9 @@ class StockPicking(models.Model):
         """Foto de los despachos abiertos ANTES de cerrar o dar de baja la recolección: si de un
         producto no se recolectó nada, Odoo cancela sus líneas de despacho y recepción solo, y sin
         esta foto la sucursal no se enteraría de lo que le falta. {move de despacho: demanda}."""
-        return {reco.id: {m.id: m.product_uom_qty for m in reco.move_ids.move_dest_ids
+        # también la recepción de cada despacho: al cancelar, Odoo borra ese vínculo igual
+        return {reco.id: {m.id: (m.product_uom_qty, m.move_dest_ids.ids)
+                          for m in reco.move_ids.move_dest_ids
                           if m.state not in ('done', 'cancel')}
                 for reco in self}
 
@@ -370,10 +372,12 @@ class StockPicking(models.Model):
             todos = self.env['stock.move'].browse(list(foto)).exists() | reco.move_ids.move_dest_ids
             # las que Odoo ya canceló solo (no se recolectó nada): viaja 0
             for dmv in todos.filtered(lambda m: m.id in foto and m.state == 'cancel'):
-                recep_moves = dmv.move_dest_ids.filtered(lambda m: m.state != 'done')
+                pedido, recep_ids = foto[dmv.id]
+                recep_moves = self.env['stock.move'].browse(recep_ids).exists().filtered(
+                    lambda m: m.state != 'done')
                 recep_moves.filtered(lambda m: m.state != 'cancel')._action_cancel()
                 for recep in recep_moves.picking_id:
-                    no_viaja.setdefault(recep, []).append((dmv.product_id, foto[dmv.id], 0.0))
+                    no_viaja.setdefault(recep, []).append((dmv.product_id, pedido, 0.0))
             despachos = todos.filtered(lambda m: m.state not in ('done', 'cancel'))
             despachos._action_assign()
             for dmv in despachos:
