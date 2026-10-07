@@ -269,11 +269,64 @@ class StockPicking(models.Model):
         if self.env.context.get('cancel_backorder'):
             sin_parcial = self.filtered(
                 lambda p: p.picking_type_id.yaguven_reabast_paso == 'recoleccion')
+        recos = self.filtered(lambda p: p.picking_type_id.yaguven_reabast_paso == 'recoleccion')
+        abiertos = sin_parcial._yaguven_despachos_abiertos()
         res = super()._action_done()
         if sin_parcial:
             sin_parcial._yaguven_ajustar_lo_que_no_viaja(
-                _("La recolección %s se cerró sin dejar pendiente lo que faltaba."))
+                _("La recolección %s se cerró sin dejar pendiente lo que faltaba."), abiertos)
+        con_parcial = (recos - sin_parcial).filtered('backorder_ids')
+        if con_parcial:
+            con_parcial._yaguven_partir_tramos()
         return res
+
+    def _yaguven_partir_tramos(self):
+        """«Crear orden parcial» en la recolección: lo que cada sucursal no llegó a reservar pasa a
+        un despacho y una recepción NUEVOS, colgados de la recolección pendiente. Así lo recolectado
+        sale ya con su propio despacho/recepción (el control de pasos y «Informar diferencias»
+        siguen igual) y lo que espera stock viaja después por su propio circuito. Mismo mecanismo
+        que la orden parcial nativa (O20 stock.move._split + _create_backorder_picking)."""
+        Move = self.env['stock.move']
+        for reco in self:
+            despachos = reco.move_ids.move_dest_ids.filtered(
+                lambda m: m.state not in ('done', 'cancel'))
+            despachos._action_assign()
+            nuevo_desp, nueva_recep = {}, {}   # picking original -> picking del segundo tramo
+            for dmv in despachos:
+                pendientes = dmv.move_orig_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+                falta = dmv.product_uom_qty - dmv.quantity
+                if not pendientes or dmv.uom_id.compare(falta, 0.0) <= 0:
+                    continue
+                rmvs = dmv.move_dest_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+                if dmv.uom_id.compare(dmv.quantity, 0.0) <= 0:
+                    # no viaja nada ahora: la línea entera pasa al segundo tramo
+                    d2, r2 = dmv, rmvs
+                    dmv.move_orig_ids = [(6, 0, pendientes.ids)]
+                else:
+                    d2 = Move.create(dmv._split(falta))
+                    d2._action_confirm(merge=False, create_proc=False)
+                    r2 = Move
+                    for rmv in rmvs:
+                        r2 |= Move.create(rmv._split(falta))
+                    r2._action_confirm(merge=False, create_proc=False)
+                    # cada tramo con su origen: lo recolectado / lo que espera stock
+                    dmv.write({'move_orig_ids': [(3, m.id) for m in pendientes],
+                               'move_dest_ids': [(6, 0, rmvs.ids)]})
+                    d2.write({'move_orig_ids': [(6, 0, pendientes.ids)],
+                              'move_dest_ids': [(6, 0, r2.ids)]})
+                    for rmv in rmvs:
+                        rmv.move_orig_ids = [(6, 0, dmv.ids)]
+                    r2.move_orig_ids = [(6, 0, d2.ids)]
+                desp = dmv.picking_id
+                if desp not in nuevo_desp:
+                    nuevo_desp[desp] = desp._create_backorder_picking()
+                d2.write({'picking_id': nuevo_desp[desp].id, 'picked': False})
+                for rmv in r2:
+                    recep = rmv.picking_id
+                    if recep not in nueva_recep:
+                        nueva_recep[recep] = recep._create_backorder_picking()
+                    rmv.write({'picking_id': nueva_recep[recep].id, 'picked': False})
+            (despachos | despachos.move_dest_ids)._recompute_state()
 
     def action_yaguven_no_se_envia(self):
         """Da de baja una recolección pendiente (lo que quedó esperando stock) con el mismo aviso
@@ -285,22 +338,35 @@ class StockPicking(models.Model):
                 raise UserError(_("«No se envía» aplica sólo a una recolección."))
             if picking.state in ('done', 'cancel'):
                 raise UserError(_("La recolección %s ya está %s.") % (picking.name, picking.state))
+            abiertos = picking._yaguven_despachos_abiertos()
             picking.move_ids.filtered(lambda m: m.state not in ('done', 'cancel'))._action_cancel()
             picking._yaguven_ajustar_lo_que_no_viaja(
-                _("Central dio de baja lo que quedaba pendiente en la recolección %s."))
+                _("Central dio de baja lo que quedaba pendiente en la recolección %s."), abiertos)
         return True
 
-    def _yaguven_ajustar_lo_que_no_viaja(self, motivo):
+    def _yaguven_despachos_abiertos(self):
+        """Foto de los despachos abiertos ANTES de cerrar o dar de baja la recolección: si de un
+        producto no se recolectó nada, Odoo cancela sus líneas de despacho y recepción solo, y sin
+        esta foto la sucursal no se enteraría de lo que le falta. {move de despacho: demanda}."""
+        return {m.id: m.product_uom_qty for m in self.move_ids.move_dest_ids
+                if m.state not in ('done', 'cancel')}
+
+    def _yaguven_ajustar_lo_que_no_viaja(self, motivo, abiertos):
         """Sobre recolecciones ya cerradas (o dadas de baja): ajusta despacho y recepción de cada
         sucursal a lo que efectivamente viaja y le avisa lo que no."""
         Pedido = self.env['yaguven.reabast.pedido']
         for reco in self:
-            despachos = reco.move_ids.move_dest_ids.filtered(
-                lambda m: m.state not in ('done', 'cancel'))
-            if not despachos:
-                continue
-            despachos._action_assign()
             no_viaja = {}   # recepción (picking) -> [(producto, pedido, viaja)]
+            # las líneas canceladas siguen vinculadas a la recolección por move_dest_ids
+            todos = reco.move_ids.move_dest_ids
+            # las que Odoo ya canceló solo (no se recolectó nada): viaja 0
+            for dmv in todos.filtered(lambda m: m.id in abiertos and m.state == 'cancel'):
+                recep_moves = dmv.move_dest_ids.filtered(lambda m: m.state != 'done')
+                recep_moves.filtered(lambda m: m.state != 'cancel')._action_cancel()
+                for recep in recep_moves.picking_id:
+                    no_viaja.setdefault(recep, []).append((dmv.product_id, abiertos[dmv.id], 0.0))
+            despachos = todos.filtered(lambda m: m.state not in ('done', 'cancel'))
+            despachos._action_assign()
             for dmv in despachos:
                 # si todavía le puede llegar mercadería (otra recolección abierta), no se toca
                 if dmv.move_orig_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
