@@ -24,6 +24,13 @@
                 <button name="%(action_report_hoja_recoleccion)d" type="action"
                         string="Imprimir hoja"
                         invisible="not yaguven_recoleccion_estado"/>
+                <!-- Lo que quedó esperando stock y Central decide no mandar (p. ej. discontinuado):
+                     cancela, ajusta despacho/recepción y avisa a la sucursal (pedido de Anael 06/10) -->
+                <button name="action_yaguven_no_se_envia" type="object"
+                        string="No se envía"
+                        groups="yaguven_reabastecimiento.group_reabast_supervisor"
+                        confirm="Se da de baja lo pendiente de esta recolección y se avisa a cada sucursal qué no le llega. ¿Seguimos?"
+                        invisible="not yaguven_recoleccion_estado or yaguven_recoleccion_estado == 'hecha' or not backorder_id or state == 'cancel'"/>
             </xpath>
             <!-- Hoja consolidada legible (3c): matriz producto × sucursal, solo en recolecciones -->
             <xpath expr="//notebook" position="inside">

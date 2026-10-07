@@ -254,6 +254,105 @@ class StockPicking(models.Model):
                 ) % (etiqueta, anterior, ', '.join(pendientes.mapped('name'))))
         return super().button_validate()
 
+    # ------------------------------------------------------------------
+    # Faltante en la recolección (pedido de Anael 06/10): «Sin orden parcial» o «No se envía»
+    # ------------------------------------------------------------------
+    # Odoo reparte lo recolectado entre los despachos por orden de reserva. Lo que un despacho no
+    # llega a reservar, con su origen ya cerrado, no va a viajar: se achica la demanda del despacho
+    # y de la recepción de esa sucursal (si no, quedan esperando mercadería que nunca sale) y se le
+    # avisa a la sucursal qué no le llega. Antes el faltante desaparecía sin rastro (RRAPAR00002).
+
+    def _action_done(self):
+        # `cancel_backorder` lo pone el nativo al validar con «Sin orden parcial»
+        # (O20 stock_picking.py button_validate: pickings_not_to_backorder → _action_done).
+        sin_parcial = self.browse()
+        if self.env.context.get('cancel_backorder'):
+            sin_parcial = self.filtered(
+                lambda p: p.picking_type_id.yaguven_reabast_paso == 'recoleccion')
+        res = super()._action_done()
+        if sin_parcial:
+            sin_parcial._yaguven_ajustar_lo_que_no_viaja(
+                _("La recolección %s se cerró sin dejar pendiente lo que faltaba."))
+        return res
+
+    def action_yaguven_no_se_envia(self):
+        """Da de baja una recolección pendiente (lo que quedó esperando stock) con el mismo aviso
+        a las sucursales que «Sin orden parcial». Sólo el Supervisor."""
+        if not self.env.user.has_group('yaguven_reabastecimiento.group_reabast_supervisor'):
+            raise UserError(_("Sólo el supervisor de Central puede dar de baja lo pendiente."))
+        for picking in self:
+            if picking.picking_type_id.yaguven_reabast_paso != 'recoleccion':
+                raise UserError(_("«No se envía» aplica sólo a una recolección."))
+            if picking.state in ('done', 'cancel'):
+                raise UserError(_("La recolección %s ya está %s.") % (picking.name, picking.state))
+            picking.move_ids.filtered(lambda m: m.state not in ('done', 'cancel'))._action_cancel()
+            picking._yaguven_ajustar_lo_que_no_viaja(
+                _("Central dio de baja lo que quedaba pendiente en la recolección %s."))
+        return True
+
+    def _yaguven_ajustar_lo_que_no_viaja(self, motivo):
+        """Sobre recolecciones ya cerradas (o dadas de baja): ajusta despacho y recepción de cada
+        sucursal a lo que efectivamente viaja y le avisa lo que no."""
+        Pedido = self.env['yaguven.reabast.pedido']
+        for reco in self:
+            despachos = reco.move_ids.move_dest_ids.filtered(
+                lambda m: m.state not in ('done', 'cancel'))
+            if not despachos:
+                continue
+            despachos._action_assign()
+            no_viaja = {}   # recepción (picking) -> [(producto, pedido, viaja)]
+            for dmv in despachos:
+                # si todavía le puede llegar mercadería (otra recolección abierta), no se toca
+                if dmv.move_orig_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+                    continue
+                viaja = dmv.quantity
+                if dmv.uom_id.compare(viaja, dmv.product_uom_qty) >= 0:
+                    continue
+                falta = dmv.product_uom_qty - viaja
+                recep_moves = dmv.move_dest_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+                for rmv in recep_moves:
+                    no_viaja.setdefault(rmv.picking_id, []).append(
+                        (dmv.product_id, dmv.product_uom_qty, viaja))
+                if dmv.uom_id.compare(viaja, 0.0) <= 0:
+                    dmv._action_cancel()
+                    recep_moves._action_cancel()
+                else:
+                    dmv.product_uom_qty = viaja
+                    for rmv in recep_moves:
+                        rmv.product_uom_qty = max(rmv.product_uom_qty - falta, 0.0)
+
+            raiz = reco
+            while raiz.backorder_id:
+                raiz = raiz.backorder_id
+            for recep, filas in no_viaja.items():
+                sucursal = recep.picking_type_id.warehouse_id
+                pedidos = Pedido.search([('picking_recoleccion_id', '=', raiz.id),
+                                         ('sucursal_id', '=', sucursal.id)])
+                reco._yaguven_avisar_no_viaja(recep, pedidos, filas, motivo % reco.name)
+
+    def _yaguven_avisar_no_viaja(self, recep, pedidos, filas, motivo):
+        """Nota en la recepción y en los pedidos de la sucursal (C.4) + actividad a sus usuarios."""
+        items = ''.join(
+            '<li><strong>%s</strong>: pedido %s, viaja %s</li>' % (
+                html_escape(prod.display_name), html_escape(self._fmt_qty(pedido)),
+                html_escape(self._fmt_qty(viaja)))
+            for prod, pedido, viaja in filas)
+        body = Markup("<p><strong>%s</strong></p><p>No viaja a la sucursal:</p><ul>%s</ul>") % (
+            motivo, Markup(items))
+        for doc in recep | pedidos:
+            doc.message_post(body=body, message_type="comment", subtype_xmlid="mail.mt_note")
+
+        uo = recep.picking_type_id.warehouse_id.operating_unit_id
+        recepcionistas = self.env.ref(
+            'yaguven_reabastecimiento.group_reabast_recepcionista', raise_if_not_found=False)
+        usuarios = (recepcionistas.all_user_ids if recepcionistas else self.env['res.users']).filtered(
+            lambda u: uo in u.operating_unit_ids
+            and not u.has_group('yaguven_reabastecimiento.group_reabast_supervisor'))
+        for user in usuarios or pedidos.user_id:
+            recep.activity_schedule(
+                'mail.mail_activity_data_todo', user_id=user.id,
+                summary=_("Mercadería que no viaja: %s") % recep.name, note=body)
+
     def action_cancel(self):
         """Ejercicio 2 de tensión funcional (2026-07-19): cancelar una recepción de
         reabastecimiento a mano (en vez de "Informar diferencias") deja el stock que ya viajó

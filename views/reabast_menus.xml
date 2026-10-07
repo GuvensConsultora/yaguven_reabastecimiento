@@ -25,12 +25,29 @@
         </field>
     </record>
 
+    <!-- Búsqueda propia (primaria, no toca la nativa): «Esperando stock» = lo que la recolección
+         dejó pendiente con «Crear orden parcial» y todavía no salió (pedido de Anael 06/10). -->
+    <record id="view_reabast_recoleccion_search" model="ir.ui.view">
+        <field name="name">reabast.recoleccion.search</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+        <field name="mode">primary</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="esperando_stock" string="Esperando stock"
+                        domain="[('backorder_id', '!=', False), ('state', 'not in', ('done', 'cancel'))]"/>
+            </xpath>
+        </field>
+    </record>
+
     <!-- ===== Acciones (reusan las vistas nativas de stock.picking) ===== -->
     <record id="action_reabast_recoleccion" model="ir.actions.act_window">
         <field name="name">Recolecciones</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_reabast_recoleccion_list"/>
+        <field name="search_view_id" ref="view_reabast_recoleccion_search"/>
         <field name="domain">[('picking_type_id.yaguven_reabast_paso', '=', 'recoleccion')]</field>
         <field name="context">{}</field>
         <field name="help" type="html">
