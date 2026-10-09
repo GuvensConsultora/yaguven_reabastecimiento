@@ -18,4 +18,21 @@
     <record id="stock.action_picking_tree_all" model="ir.actions.act_window">
         <field name="context">{'contact_display': 'partner_address', 'default_company_id': allowed_company_ids[0], 'search_default_de_mi_sucursal': 1}</field>
     </record>
+
+    <!-- Tablero de Inventario (Información general): tarjetas de la propia sucursal por defecto. -->
+    <record id="view_picking_type_search_de_mi_sucursal" model="ir.ui.view">
+        <field name="name">stock.picking.type.search.de.mi.sucursal</field>
+        <field name="model">stock.picking.type</field>
+        <field name="inherit_id" ref="stock.view_pickingtype_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="de_mi_sucursal" string="De mi sucursal"
+                        domain="[('yaguven_de_mi_sucursal', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock.stock_picking_type_action" model="ir.actions.act_window">
+        <field name="context">{'search_default_de_mi_sucursal': 1}</field>
+    </record>
 </odoo>

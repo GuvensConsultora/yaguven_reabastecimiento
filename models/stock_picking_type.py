@@ -21,6 +21,22 @@ class StockPickingType(models.Model):
              '"Envío entre sucursales" es la salida de una sucursal hacia el tránsito de otra: '
              'la sucursal que recibe lo recepciona con su tipo de Recepción de siempre.')
 
+    # «De mi sucursal» en el tablero de Inventario (09/10): filtro de PANTALLA, como en las listas de
+    # traslados; no regla de acceso (cortaría circuitos que leen tipos de otra sucursal).
+    yaguven_de_mi_sucursal = fields.Boolean(
+        string='De mi sucursal', compute='_compute_yaguven_de_mi_sucursal',
+        search='_search_yaguven_de_mi_sucursal')
+
+    def _compute_yaguven_de_mi_sucursal(self):
+        tipos = self.env['stock.picking']._yaguven_tipos_de_mi_sucursal()
+        for tipo in self:
+            tipo.yaguven_de_mi_sucursal = tipos is None or tipo in tipos
+
+    def _search_yaguven_de_mi_sucursal(self, operator, value):
+        dominio = self.env['stock.picking']._search_yaguven_de_mi_sucursal(operator, value)
+        # el del picking filtra por picking_type_id; acá es el propio id
+        return [('id', d[1], d[2]) if isinstance(d, tuple) and d[0] == 'picking_type_id' else d for d in dominio]
+
     # --- Envío entre sucursales -------------------------------------------------------------
     # Las sucursales habilitadas se derivan de la topología, no de ids fijos (B.23): son los
     # almacenes que tienen tipo de Recepción de reabastecimiento, menos Central (el almacén de la
