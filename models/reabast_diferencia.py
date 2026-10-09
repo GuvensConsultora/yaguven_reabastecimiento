@@ -106,8 +106,9 @@ class ReabastDiferencia(models.Model):
         return True
 
     def _resolver_ajuste(self, linea):
-        """Asume la diferencia. La recepción se validó con lo físico real (5a, sin backorder), así
-        que el stock ya refleja la realidad: no hay movimiento que generar, solo se cierra la línea."""
+        """Asume la diferencia. La recepción se validó con lo físico real (5a, sin backorder) y lo que
+        llegó sin estar en el remito ya se cargó a la sucursal (5a, 20.0.1.26.1), así que el stock ya
+        refleja la realidad: no hay movimiento que generar, solo se cierra la línea."""
         linea.resuelta = True
         self._post_resolucion(linea, _(
             "Ajuste de transferencia: se asume la diferencia. El stock ya refleja lo recibido "

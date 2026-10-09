@@ -104,8 +104,12 @@ class ReabastDiferenciaWizard(models.TransientModel):
                 if corr:
                     correcciones_transito.append(corr)
 
-        # 2) Extras: productos que llegaron y no estaban (sobrante / incorrecto). Se REGISTRAN; el
-        #    efecto sobre el stock (entra a la sucursal / devolución) lo decide Central en 5b.
+        # 2) Extras: productos que llegaron y no estaban (sobrante / incorrecto). Se registran Y se
+        #    mueven de donde salieron a la sucursal: físicamente ya están en la sucursal. Antes sólo
+        #    se registraban y ninguna resolución de 5b lo acomodaba («Ajuste» no mueve y «Devolución»
+        #    descuenta de la sucursal lo que nunca le entró): quedaba origen +N y sucursal −N
+        #    (DIF/RRAPAR00022, 09/10). Con esto, 5b decide sobre stock que ya refleja lo físico.
+        origen_extras = self._ubicacion_central(picking.move_ids[:1]) if self.extra_ids else False
         for ex in self.extra_ids:
             prod = ex.producto_id
             rounding = _uom_rounding(self.env) or 1.0
@@ -119,6 +123,12 @@ class ReabastDiferenciaWizard(models.TransientModel):
                 'cant_recibida': ex.cant_recibida,
                 'nota': ex.nota or False,
             }))
+            if not origen_extras:
+                raise UserError(_(
+                    "No se pudo determinar de dónde salió %s para cargarlo en la sucursal.")
+                    % prod.display_name)
+            correcciones_transito.append(self._mover(
+                prod, ex.cant_recibida, origen_extras, picking.location_dest_id, company))
 
         # 3) Cerrar la recepción con lo físico. Si llegó algo, se valida (SIN backorder):
         #    skip_backorder + picking_ids_not_to_backorder son los contextos nativos que saltan
@@ -212,6 +222,10 @@ class ReabastDiferenciaWizard(models.TransientModel):
             origen, destino, cant = transito, central, falto
         else:
             origen, destino, cant = central, transito, -falto
+        return self._mover(producto, cant, origen, destino, company)
+
+    def _mover(self, producto, cant, origen, destino, company):
+        """Movimiento hecho origen → destino (corrección de stock, sin picking)."""
         correccion = self.env['stock.move'].create({
             'product_id': producto.id, 'product_uom_qty': cant, 'company_id': company.id,
             'location_id': origen.id, 'location_dest_id': destino.id,
@@ -238,9 +252,9 @@ class ReabastDiferenciaWizard(models.TransientModel):
                 html_escape(prod.display_name), html_escape('%g' % cant),
                 html_escape(origen.display_name), html_escape(destino.display_name),
             ) for prod, cant, origen, destino in correcciones)
-        body = (_("<p><strong>Tránsito reconciliado automáticamente.</strong></p>"
-                  "<p>Se corrigió el stock que había quedado desalineado en la ubicación de "
-                  "tránsito por esta diferencia:</p><ul>%s</ul>") % filas)
+        body = (_("<p><strong>Stock corregido automáticamente.</strong></p>"
+                  "<p>Se movió lo que esta diferencia dejaba desalineado (tránsito, y lo que llegó "
+                  "sin estar en el remito):</p><ul>%s</ul>") % filas)
         diferencia.message_post(body=Markup(body), message_type="comment", subtype_xmlid="mail.mt_note")
 
 
