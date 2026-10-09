@@ -213,6 +213,10 @@ class ReabastDiferencia(models.Model):
             'picking_id': picking.id, 'picking_type_id': tipo.id,
         })
         picking.action_confirm()
+        # O20 recalcula el origen de la cabecera desde el tipo (Central): la lista mostraba
+        # «WH/Stock → WH/Stock» aunque el movimiento sale de la sucursal (RDEV00001, 09/10).
+        if picking.location_id != src:
+            picking.location_id = src
         return picking
 
     def _post_resolucion(self, linea, texto):
