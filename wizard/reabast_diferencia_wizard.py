@@ -69,9 +69,16 @@ class ReabastDiferenciaWizard(models.TransientModel):
         # 1) Esperado: escribir la cantidad recibida en cada move + registrar faltante/sobrante/cantidad
         for ln in self.line_ids:
             mv = ln.move_id
-            if not mv:
-                continue
             prod = ln.producto_id
+            if not mv:
+                # Si la vista no reenvió el vínculo (09/10: move_id oculto sin force_save), se busca
+                # el move por producto en la recepción. Nunca se saltea la línea: saltearla validaba
+                # la recepción con lo despachado y el faltante se perdía sin aviso.
+                mv = picking.move_ids.filtered(
+                    lambda m: m.product_id == prod and m.state not in ('done', 'cancel'))
+                if len(mv) != 1:
+                    raise UserError(_("No se pudo ubicar en la recepción el renglón de %s.")
+                                    % prod.display_name)
             rounding = _uom_rounding(self.env) or 1.0
             if float_compare(ln.cant_recibida, 0.0, precision_rounding=rounding) < 0:
                 raise UserError(_("La cantidad recibida no puede ser negativa (%s).") % prod.display_name)

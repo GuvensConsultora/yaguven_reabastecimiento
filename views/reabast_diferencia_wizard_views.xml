@@ -23,7 +23,7 @@
                     <!-- force_save en los readonly: el cliente web no reenvía por defecto los
                          readonly de la lista editable; sin esto action_aplicar los recibe en False. -->
                     <list editable="bottom" create="0" delete="0" string="Lo esperado">
-                        <field name="move_id" column_invisible="1"/>
+                        <field name="move_id" column_invisible="1" force_save="1"/>
                         <field name="producto_id" readonly="1" force_save="1"/>
                         <field name="cant_esperada" readonly="1" force_save="1"/>
                         <field name="cant_recibida"/>
