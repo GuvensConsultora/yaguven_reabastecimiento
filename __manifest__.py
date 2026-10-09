@@ -1,6 +1,6 @@
 {
     'name': 'Yagüven - Reabastecimiento Central/Sucursales',
-    'version': '20.0.1.25.1',
+    'version': '20.0.1.26.0',
     'summary': 'Circuito de reabastecimiento con gateo de pasos (recolección → despacho → recepción)',
     'description': """
 Capa operativa del circuito de reabastecimiento Central → Sucursales (y sucursal → sucursal).
@@ -55,6 +55,7 @@ por sucursal con el faltante no despachado.
         'data/reabast_cron.xml',
         'report/reabast_hoja_report.xml',
         'views/reabast_menus.xml',
+        'views/reabast_de_mi_sucursal_views.xml',
         'views/reabast_colgados_views.xml',
         'views/reabast_envio_views.xml',
         'views/reabast_picking_views.xml',

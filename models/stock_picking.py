@@ -56,6 +56,39 @@ class StockPicking(models.Model):
         dentro = (operator == '=') == value
         return [('picking_type_id', 'in' if dentro else 'not in', tipos.ids)]
 
+    # «De mi sucursal» (pedido de Anael 08/10): filtro de PANTALLA, no regla de acceso. Una regla
+    # sobre stock.picking corta los circuitos que leen traslados de otra UO por dentro (despacho de
+    # Central al validar la recepción, envío de la que manda al pedir); probado en testing el 09/10.
+    # Quien tiene «ve todas las UO» (Central, supervisores) ve todo con el filtro puesto.
+    yaguven_de_mi_sucursal = fields.Boolean(
+        string='De mi sucursal', compute='_compute_yaguven_de_mi_sucursal',
+        search='_search_yaguven_de_mi_sucursal')
+
+    def _yaguven_tipos_de_mi_sucursal(self):
+        """None = todas (perfil «ve todas las UO»); si no, los tipos de los almacenes de sus UO."""
+        if self.env.user.has_group('yaguven_operating_unit.group_operating_unit_all'):
+            return None
+        return self.env['stock.picking.type'].sudo().search([
+            ('warehouse_id.operating_unit_id', 'in', self.env.user.operating_unit_ids.ids)])
+
+    def _compute_yaguven_de_mi_sucursal(self):
+        tipos = self._yaguven_tipos_de_mi_sucursal()
+        for picking in self:
+            picking.yaguven_de_mi_sucursal = tipos is None or picking.picking_type_id in tipos
+
+    def _search_yaguven_de_mi_sucursal(self, operator, value):
+        if operator == 'in':
+            operator, value = '=', True in value
+        elif operator == 'not in':
+            operator, value = '!=', True in value
+        if operator not in ('=', '!=') or not isinstance(value, bool):
+            raise UserError(_("Operación no soportada para «De mi sucursal»."))
+        dentro = (operator == '=') == value
+        tipos = self._yaguven_tipos_de_mi_sucursal()
+        if tipos is None:
+            return [] if dentro else [('id', '=', False)]
+        return [('picking_type_id', 'in' if dentro else 'not in', tipos.ids)]
+
     # --- Reporte de diferencias de recepción (sub-ladrillo 5) ---
     yaguven_diferencia_id = fields.Many2one(
         'yaguven.reabast.diferencia', string='Diferencias informadas', copy=False, readonly=True,

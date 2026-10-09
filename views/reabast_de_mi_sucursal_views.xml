@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- «De mi sucursal»: cada sucursal abre las listas de traslados viendo sólo lo suyo. Es un filtro
+         de pantalla (se puede quitar), no una regla de acceso: la regla cortaba circuitos (09/10). -->
+    <record id="view_picking_search_de_mi_sucursal" model="ir.ui.view">
+        <field name="name">stock.picking.search.de.mi.sucursal</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="de_mi_sucursal" string="De mi sucursal"
+                        domain="[('yaguven_de_mi_sucursal', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Inventario › Traslados: mismo contexto nativo + el filtro puesto por defecto. -->
+    <record id="stock.action_picking_tree_all" model="ir.actions.act_window">
+        <field name="context">{'contact_display': 'partner_address', 'default_company_id': allowed_company_ids[0], 'search_default_de_mi_sucursal': 1}</field>
+    </record>
+</odoo>
